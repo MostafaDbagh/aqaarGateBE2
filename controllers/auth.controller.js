@@ -130,6 +130,9 @@ const signOut = async (req, res, next) => {
 
 // OTP Functions
 const sendOTP = async (req, res, next) => {
+  const startTime = Date.now();
+  logger.info('sendOTP request received', { email: req.body.email, type: req.body.type });
+  
   try {
     const { email, type = 'signup' } = req.body;
     
@@ -175,31 +178,33 @@ const sendOTP = async (req, res, next) => {
       attempts: 0
     });
 
-    try {
-      await sendOtpEmail({
-        to: email,
-        otp,
-        type,
-      });
-    } catch (emailError) {
-      logger.error('Failed to send OTP email', emailError);
-      global.otpStore.delete(`${email}_${type}`);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to send OTP email. Please try again later.',
-        error: 'EMAIL_SEND_FAILED',
-        ...(process.env.NODE_ENV !== 'production'
-          ? { details: emailError.message }
-          : {})
-      });
-    }
-
+    // Send response immediately, then send email in background (non-blocking)
+    const responseTime = Date.now() - startTime;
+    logger.info('sendOTP response sent', { email, type, responseTime: `${responseTime}ms` });
+    
     res.status(200).json({
       success: true,
       message: `OTP sent successfully for ${type === 'signup' ? 'email verification' : 'password reset'}`,
       email: email,
       type: type,
       ...(process.env.NODE_ENV !== 'production' ? { otp } : {})
+    });
+
+    // Send email in background (non-blocking) - don't await
+    sendOtpEmail({
+      to: email,
+      otp,
+      type,
+    }).catch((emailError) => {
+      // Log error but don't block response
+      logger.error('Failed to send OTP email in background', {
+        email,
+        type,
+        error: emailError.message,
+        stack: emailError.stack
+      });
+      // Remove OTP from store if email fails
+      global.otpStore.delete(`${email}_${type}`);
     });
   } catch (error) {
     next(error);

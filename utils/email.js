@@ -58,6 +58,9 @@ const buildTransporter = () => {
     tls: {
       rejectUnauthorized: false,
     },
+    connectionTimeout: 10000, // 10 seconds connection timeout
+    socketTimeout: 10000, // 10 seconds socket timeout
+    greetingTimeout: 10000, // 10 seconds greeting timeout
   });
 
   transporter.verify((error, success) => {
@@ -93,7 +96,25 @@ const sendMail = async ({ to, subject, html, text }) => {
     html,
   };
 
-  return mailTransporter.sendMail(mailOptions);
+  // Add timeout wrapper to prevent hanging
+  const EMAIL_TIMEOUT = 15000; // 15 seconds timeout for sending email
+  
+  try {
+    return await Promise.race([
+      mailTransporter.sendMail(mailOptions),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Email send timeout after 15 seconds')), EMAIL_TIMEOUT)
+      )
+    ]);
+  } catch (error) {
+    logger.error('Error sending email:', {
+      to,
+      subject,
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
+  }
 };
 
 const sendOtpEmail = async ({ to, otp, type }) => {
