@@ -28,7 +28,8 @@ const logger = {
    * Log errors (always logged)
    */
   error: (...args) => {
-    console.error('[ERROR]', ...args);
+    const timestamp = new Date().toISOString();
+    console.error(`[ERROR ${timestamp}]`, ...args);
     // TODO: Integrate with error tracking service (e.g., Sentry)
   },
 

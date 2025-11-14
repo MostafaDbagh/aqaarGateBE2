@@ -65,9 +65,18 @@ const buildTransporter = () => {
 
   transporter.verify((error, success) => {
     if (error) {
-      logger.error('SMTP connection failed:', error);
+      logger.error('SMTP connection verification failed:', {
+        host: smtpHost,
+        port: smtpPort,
+        error: error.message,
+        code: error.code
+      });
     } else if (success) {
-      logger.info('SMTP server is ready to take messages');
+      // Always log SMTP ready status
+      logger.error('[SMTP_READY] SMTP server is ready to take messages', {
+        host: smtpHost,
+        port: smtpPort
+      });
     }
   });
 
@@ -107,12 +116,23 @@ const sendMail = async ({ to, subject, html, text }) => {
       )
     ]);
   } catch (error) {
-    logger.error('Error sending email:', {
+    // Enhanced error logging with more diagnostic info
+    const errorDetails = {
       to,
       subject,
       error: error.message,
-      stack: error.stack
-    });
+      errorCode: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+    };
+    
+    // Only include stack in development
+    if (process.env.NODE_ENV !== 'production') {
+      errorDetails.stack = error.stack;
+    }
+    
+    logger.error('Error sending email:', errorDetails);
     throw error;
   }
 };

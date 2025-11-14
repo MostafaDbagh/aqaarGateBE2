@@ -1,6 +1,13 @@
 // Load environment variables FIRST before requiring any other modules
 require('dotenv').config();
 
+// Load SendGrid API key if sendgrid.env exists
+try {
+  require('dotenv').config({ path: './sendgrid.env' });
+} catch (error) {
+  // sendgrid.env is optional, ignore if it doesn't exist
+}
+
 const express = require('express');
 const db = require('./db/connect');
 const cors = require('cors');
