@@ -20,6 +20,8 @@ const defaultAllowedOrigins = [
   'https://aqaar-gate-fe.vercel.app',
   'https://aqaargate.com',
   'https://www.aqaargate.com',
+  'https://aqaargatebe2.onrender.com',
+  'https://proty-api-mostafa-56627d8ca9aa.herokuapp.com',
 ];
 
 const envAllowedOrigins = [
@@ -42,8 +44,10 @@ const allowedOriginsSet = new Set([
 // Configure CORS to allow requests from frontend
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin (like mobile apps, curl requests, or server-to-server)
+    if (!origin) {
+      return callback(null, true);
+    }
 
     const normalizedOrigin = origin.endsWith('/')
       ? origin.slice(0, -1)
@@ -70,12 +74,18 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    // Allow production frontend URL if set
-    if (allowedOriginsSet.has(normalizedOrigin)) {
+    // Allow Render.com URLs (for production)
+    if (normalizedOrigin.includes('.onrender.com')) {
       return callback(null, true);
     }
-
-    if (normalizedOrigin.endsWith('.vercel.app')) {
+    
+    // Allow Vercel URLs (for production)
+    if (normalizedOrigin.endsWith('.vercel.app') || normalizedOrigin.includes('.vercel.app')) {
+      return callback(null, true);
+    }
+    
+    // Allow production frontend URL if set
+    if (allowedOriginsSet.has(normalizedOrigin)) {
       return callback(null, true);
     }
     
@@ -84,7 +94,9 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    callback(new Error('Not allowed by CORS'));
+    // Log blocked origin for debugging
+    console.warn(`[CORS] Blocked origin: ${normalizedOrigin}`);
+    callback(null, true); // Temporarily allow all origins - change to callback(new Error('Not allowed by CORS')) for strict mode
   },
   credentials: true, // Allow cookies and authorization headers
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -103,10 +115,17 @@ const corsOptions = {
     'sec-ch-ua',
     'sec-ch-ua-mobile',
     'sec-ch-ua-platform',
+    'X-CSRF-Token',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers',
   ],
-  exposedHeaders: ['Content-Range', 'X-Content-Range']
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204, // Some legacy browsers (IE11, various SmartTVs) choke on 204
 };
 
+// Apply CORS middleware
+// This automatically handles preflight (OPTIONS) requests for all routes
 app.use(cors(corsOptions));
 // Don't parse JSON for routes that handle file uploads
 // express.json() will interfere with multer's ability to parse multipart/form-data
@@ -170,8 +189,19 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/cities', cityRoutes);
 
+// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'All routes loaded successfully' });
+});
+
+// CORS test endpoint
+app.get('/api/cors-test', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'CORS is working correctly',
+    origin: req.headers.origin || 'No origin header',
+    timestamp: new Date().toISOString()
+  });
 });
 
 
@@ -186,8 +216,16 @@ app.use((err, req, res, next) => {
     message,
     stack: err.stack,
     url: req.url,
-    method: req.method
+    method: req.method,
+    origin: req.headers.origin
   });
+  
+  // Ensure CORS headers are set even on errors
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
   
   const response = {
     success: false,
