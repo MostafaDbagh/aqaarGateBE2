@@ -124,6 +124,8 @@ app.use('/api/message', express.json());
 app.use('/api/newsletter', express.json());
 app.use('/api/blog', express.json());
 app.use('/api/dashboard', express.json());
+app.use('/api/categories', express.json());
+app.use('/api/cities', express.json());
 // Apply express.json() to listing routes (but NOT to /create which uses multipart/form-data)
 // We'll handle this in the route handler itself
 app.use('/api/listing', (req, res, next) => {
@@ -150,6 +152,8 @@ const messageRoutes = require('./routes/message.route');
 const newsletterRoutes = require('./routes/newsletter.route');
 const blogRoutes = require('./routes/blog.route');
 const dashboardRoutes = require('./routes/dashboard.route');
+const categoryRoutes = require('./routes/category.route');
+const cityRoutes = require('./routes/city.route');
 
 app.use('/api/auth', authRouter);
 app.use('/api/user', userRouter);
@@ -163,6 +167,8 @@ app.use('/api/message', messageRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/blog', blogRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/cities', cityRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'All routes loaded successfully' });
