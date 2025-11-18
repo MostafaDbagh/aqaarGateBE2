@@ -22,18 +22,20 @@ const getCategoryStats = async (req, res, next) => {
       propertyTypes.map(async (typeConfig) => {
         let count = 0;
         
-        // Try exact match first
+        // Try exact match first (only approved)
         count = await Listing.countDocuments({
           propertyType: { $in: typeConfig.match },
-          isDeleted: { $ne: true }
+          isDeleted: { $ne: true },
+          approvalStatus: 'approved'
         });
         
-        // If no exact match, try case-insensitive regex for each match pattern
+        // If no exact match, try case-insensitive regex for each match pattern (only approved)
         if (count === 0) {
           for (const pattern of typeConfig.match) {
             const regexCount = await Listing.countDocuments({
               propertyType: { $regex: new RegExp(pattern, 'i') },
-              isDeleted: { $ne: true }
+              isDeleted: { $ne: true },
+              approvalStatus: 'approved'
             });
             if (regexCount > 0) {
               count = regexCount;
@@ -42,14 +44,15 @@ const getCategoryStats = async (req, res, next) => {
           }
         }
         
-        // Special handling for Villa/farms - check if it contains villa or farm
+        // Special handling for Villa/farms - check if it contains villa or farm (only approved)
         if (typeConfig.name === 'Villa/farms' && count === 0) {
           count = await Listing.countDocuments({
             $or: [
               { propertyType: { $regex: /villa/i } },
               { propertyType: { $regex: /farm/i } }
             ],
-            isDeleted: { $ne: true }
+            isDeleted: { $ne: true },
+            approvalStatus: 'approved'
           });
         }
         
@@ -62,9 +65,10 @@ const getCategoryStats = async (req, res, next) => {
       })
     );
     
-    // Also get total count
+    // Also get total count (only approved)
     const totalCount = await Listing.countDocuments({
-      isDeleted: { $ne: true }
+      isDeleted: { $ne: true },
+      approvalStatus: 'approved'
     });
     
     logger.info(`Category stats fetched: ${stats.length} categories, total: ${totalCount} listings`);
@@ -98,10 +102,11 @@ const getCategoryDetails = async (req, res, next) => {
       });
     }
     
-    // Get count for specific property type
+    // Get count for specific property type (only approved)
     const count = await Listing.countDocuments({
       propertyType: { $regex: new RegExp(`^${propertyType}$`, 'i') },
-      isDeleted: { $ne: true }
+      isDeleted: { $ne: true },
+      approvalStatus: 'approved'
     });
     
     // Get average price for this category
@@ -109,7 +114,8 @@ const getCategoryDetails = async (req, res, next) => {
       {
         $match: {
           propertyType: { $regex: new RegExp(`^${propertyType}$`, 'i') },
-          isDeleted: { $ne: true }
+          isDeleted: { $ne: true },
+          approvalStatus: 'approved'
         }
       },
       {
@@ -152,9 +158,10 @@ const getCategoryDetails = async (req, res, next) => {
  */
 const getAllPropertyTypes = async (req, res, next) => {
   try {
-    // Get distinct property types from database
+    // Get distinct property types from database (only approved)
     const propertyTypes = await Listing.distinct('propertyType', {
-      isDeleted: { $ne: true }
+      isDeleted: { $ne: true },
+      approvalStatus: 'approved'
     });
     
     res.status(200).json({

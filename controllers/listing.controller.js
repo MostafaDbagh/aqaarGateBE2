@@ -397,8 +397,56 @@ const getListingImages = async (req, res, next) => {
 
 const getListingsByAgent = async (req, res, next) => {
   try {
-    const listings = await Listing.find({ agentId: req.params.agentId });
-    res.status(200).json(listings);
+    const { agentId } = req.params;
+    const { page = 1, limit = 10, status, approvalStatus, public: isPublic } = req.query;
+    
+    // Build query - exclude deleted properties
+    const query = {
+      $or: [
+        { agentId: agentId },
+        { agent: agentId }
+      ],
+      isDeleted: { $ne: true }
+    };
+    
+    // For public pages (home, listing page, agent listing page), show only approved
+    // For agent dashboard, show all statuses (pending, approved, rejected)
+    if (isPublic === 'true' || isPublic === true) {
+      query.approvalStatus = 'approved';
+    }
+    
+    // Add optional filters
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    
+    if (approvalStatus && approvalStatus !== 'all') {
+      query.approvalStatus = approvalStatus;
+    }
+    
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Execute query
+    const [listings, total] = await Promise.all([
+      Listing.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Listing.countDocuments(query)
+    ]);
+    
+    res.status(200).json({
+      success: true,
+      data: listings,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
   } catch (error) {
     next(error);
   }

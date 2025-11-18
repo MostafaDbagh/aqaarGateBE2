@@ -50,7 +50,7 @@ const getAllProperties = async (req, res, next) => {
         .sort(sortOptions)
         .skip(skip)
         .limit(parseInt(limit))
-        .populate('agentId', 'username email')
+        .populate('agentId', 'username email isBlocked blockedReason')
         .lean(),
       Listing.countDocuments(query)
     ]);
@@ -87,6 +87,14 @@ const updatePropertyApproval = async (req, res, next) => {
     const property = await Listing.findById(id);
     if (!property) {
       return next(errorHandler(404, 'Property not found'));
+    }
+
+    // Check if trying to approve a property with a blocked agent
+    if (approvalStatus === 'approved' && property.agentId) {
+      const agent = await User.findById(property.agentId);
+      if (agent && agent.isBlocked) {
+        return next(errorHandler(400, `Cannot approve property. The agent (${agent.username || agent.email}) is blocked. Please unblock the agent first.`));
+      }
     }
 
     property.approvalStatus = approvalStatus;
@@ -383,7 +391,9 @@ const getDashboardStats = async (req, res, next) => {
       rejectedProperties,
       totalContacts,
       totalRentalServices,
-      pendingRentalServices
+      pendingRentalServices,
+      totalAgents,
+      blockedAgents
     ] = await Promise.all([
       Listing.countDocuments({ isDeleted: { $ne: true } }),
       Listing.countDocuments({ isDeleted: { $ne: true }, approvalStatus: 'pending' }),
@@ -391,8 +401,19 @@ const getDashboardStats = async (req, res, next) => {
       Listing.countDocuments({ isDeleted: { $ne: true }, approvalStatus: 'rejected' }),
       Contact.countDocuments(),
       PropertyRental.countDocuments(),
-      PropertyRental.countDocuments({ status: 'pending' })
+      PropertyRental.countDocuments({ status: 'pending' }),
+      User.countDocuments({ role: 'agent' }),
+      User.countDocuments({ role: 'agent', isBlocked: true })
     ]);
+
+    // Log for debugging
+    logger.info('[ADMIN_DASHBOARD_STATS]', {
+      totalAgents,
+      blockedAgents,
+      totalProperties,
+      totalContacts,
+      totalRentalServices
+    });
 
     res.status(200).json({
       success: true,
@@ -409,6 +430,10 @@ const getDashboardStats = async (req, res, next) => {
         rentalServices: {
           total: totalRentalServices,
           pending: pendingRentalServices
+        },
+        agents: {
+          total: totalAgents,
+          blocked: blockedAgents
         }
       }
     });
