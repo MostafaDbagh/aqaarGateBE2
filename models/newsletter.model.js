@@ -45,7 +45,7 @@ const newsletterSchema = new mongoose.Schema({
 });
 
 // Index for faster queries
-newsletterSchema.index({ email: 1 });
+// Note: email index is automatically created by unique: true, so we don't need to add it manually
 newsletterSchema.index({ isActive: 1 });
 newsletterSchema.index({ subscribedAt: -1 });
 
