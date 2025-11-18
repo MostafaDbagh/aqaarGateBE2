@@ -145,6 +145,7 @@ app.use('/api/blog', express.json());
 app.use('/api/dashboard', express.json());
 app.use('/api/categories', express.json());
 app.use('/api/cities', express.json());
+app.use('/api/property-rental', express.json());
 // Apply express.json() to listing routes (but NOT to /create which uses multipart/form-data)
 // We'll handle this in the route handler itself
 app.use('/api/listing', (req, res, next) => {
@@ -173,6 +174,7 @@ const blogRoutes = require('./routes/blog.route');
 const dashboardRoutes = require('./routes/dashboard.route');
 const categoryRoutes = require('./routes/category.route');
 const cityRoutes = require('./routes/city.route');
+const propertyRentalRoutes = require('./routes/propertyRental.route');
 
 app.use('/api/auth', authRouter);
 app.use('/api/user', userRouter);
@@ -188,6 +190,7 @@ app.use('/api/blog', blogRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/cities', cityRoutes);
+app.use('/api/property-rental', propertyRentalRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
