@@ -346,7 +346,7 @@ const getListingById = async (req, res, next) => {
     if (listing.agentId) {
       try {
         const userAgent = await User.findById(listing.agentId)
-          .select('username email phone avatar location description role')
+          .select('username email phone avatar location description role isBlocked')
           .lean();
         
         if (userAgent && userAgent.role === 'agent') {
@@ -361,8 +361,13 @@ const getListingById = async (req, res, next) => {
             image: userAgent.avatar || null, // Also include as 'image' for compatibility
             imageUrl: userAgent.avatar || null, // Also include as 'imageUrl' for compatibility
             location: userAgent.location || '',
-            description: userAgent.description || ''
+            description: userAgent.description || '',
+            isBlocked: userAgent.isBlocked || false
           };
+          // Add blocked flag to listing if agent is blocked
+          if (userAgent.isBlocked) {
+            listing.isAgentBlocked = true;
+          }
         }
       } catch (populateError) {
         logger.warn('Error populating agentId:', populateError);
@@ -413,9 +418,8 @@ const getFilteredListings = async (req, res, next) => {
     filters.isDeleted = { $ne: true };
     
     // For public search, show approved listings only
-    // Don't filter by approvalStatus for now - show all non-deleted listings
-    // This allows pending listings to be visible while waiting for approval
-    // filters.approvalStatus = 'approved';  // Commented out to show all listings
+    // No listing will be published without admin approval
+    filters.approvalStatus = 'approved';
     
     logger.debug('getFilteredListings - filters:', filters);
     logger.debug('getFilteredListings - sortOptions:', sortOptions);
@@ -427,6 +431,24 @@ const getFilteredListings = async (req, res, next) => {
       .limit(limit)
       .skip(skip)
       .lean(); // Use lean() for better performance
+    
+    // Check if agents are blocked and add blocked flag to listings
+    const agentIds = [...new Set(listings.map(l => l.agentId || l.agent).filter(Boolean))];
+    if (agentIds.length > 0) {
+      const blockedAgents = await User.find({
+        _id: { $in: agentIds },
+        isBlocked: true
+      }).select('_id').lean();
+      
+      const blockedAgentIds = new Set(blockedAgents.map(a => a._id.toString()));
+      
+      listings.forEach(listing => {
+        const agentId = listing.agentId?.toString() || listing.agent?.toString();
+        if (agentId && blockedAgentIds.has(agentId)) {
+          listing.isAgentBlocked = true;
+        }
+      });
+    }
     
     logger.debug('getFilteredListings - found', listings.length, 'listings');
     

@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['user', 'agent'],
+      enum: ['user', 'agent', 'admin'],
       default: 'user',
       required: true,
     },
@@ -122,6 +122,19 @@ const userSchema = new mongoose.Schema(
     hasUnlimitedPoints: {
       type: Boolean,
       default: false,
+    },
+    // Blocked/Deleted flag for agents
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
+    blockedAt: {
+      type: Date,
+      default: null,
+    },
+    blockedReason: {
+      type: String,
+      default: '',
     },
   },
   { timestamps: true }
