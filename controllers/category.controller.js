@@ -22,10 +22,11 @@ const getCategoryStats = async (req, res, next) => {
       propertyTypes.map(async (typeConfig) => {
         let count = 0;
         
-        // Try exact match first (only approved)
+        // Try exact match first (only approved, not sold)
         count = await Listing.countDocuments({
           propertyType: { $in: typeConfig.match },
           isDeleted: { $ne: true },
+          isSold: { $ne: true },
           approvalStatus: 'approved'
         });
         
@@ -35,6 +36,7 @@ const getCategoryStats = async (req, res, next) => {
             const regexCount = await Listing.countDocuments({
               propertyType: { $regex: new RegExp(pattern, 'i') },
               isDeleted: { $ne: true },
+              isSold: { $ne: true },
               approvalStatus: 'approved'
             });
             if (regexCount > 0) {
@@ -52,6 +54,7 @@ const getCategoryStats = async (req, res, next) => {
               { propertyType: { $regex: /farm/i } }
             ],
             isDeleted: { $ne: true },
+            isSold: { $ne: true },
             approvalStatus: 'approved'
           });
         }
@@ -65,9 +68,10 @@ const getCategoryStats = async (req, res, next) => {
       })
     );
     
-    // Also get total count (only approved)
+    // Also get total count (only approved, not sold)
     const totalCount = await Listing.countDocuments({
       isDeleted: { $ne: true },
+      isSold: { $ne: true },
       approvalStatus: 'approved'
     });
     
@@ -106,6 +110,7 @@ const getCategoryDetails = async (req, res, next) => {
     const count = await Listing.countDocuments({
       propertyType: { $regex: new RegExp(`^${propertyType}$`, 'i') },
       isDeleted: { $ne: true },
+      isSold: { $ne: true },
       approvalStatus: 'approved'
     });
     
@@ -115,6 +120,7 @@ const getCategoryDetails = async (req, res, next) => {
         $match: {
           propertyType: { $regex: new RegExp(`^${propertyType}$`, 'i') },
           isDeleted: { $ne: true },
+          isSold: { $ne: true },
           approvalStatus: 'approved'
         }
       },
@@ -158,9 +164,10 @@ const getCategoryDetails = async (req, res, next) => {
  */
 const getAllPropertyTypes = async (req, res, next) => {
   try {
-    // Get distinct property types from database (only approved)
+    // Get distinct property types from database (only approved, not sold)
     const propertyTypes = await Listing.distinct('propertyType', {
       isDeleted: { $ne: true },
+      isSold: { $ne: true },
       approvalStatus: 'approved'
     });
     

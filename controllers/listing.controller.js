@@ -278,8 +278,20 @@ const deleteListing = async (req, res, next) => {
       return next(errorHandler(403, 'You can only delete your own listings!'));
     }
 
-    await Listing.findByIdAndDelete(req.params.id);
-    res.status(200).json('Listing has been deleted!');
+    // Get deletion reason from request body
+    const { deletedReason } = req.body;
+
+    // Soft delete: mark as deleted instead of actually deleting
+    listing.isDeleted = true;
+    listing.deletedReason = deletedReason || 'No reason provided';
+    listing.deletedAt = new Date();
+    await listing.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Listing has been deleted!',
+      data: listing
+    });
   } catch (error) {
     next(error);
   }
@@ -320,6 +332,24 @@ const updateListing = async (req, res, next) => {
     if (req.body && req.body.propertyType === 'Holiday Home') {
       req.body.status = 'rent';
       req.body.furnished = true;
+    }
+
+    // If marking as sold, automatically set soldDate to current date/time
+    // If marking as unsold, clear soldDate
+    if (req.body.isSold === true) {
+      // Dynamically set soldDate to current date when marking as sold
+      // This ensures the date is always saved when user clicks "Mark as Sold"
+      if (!listing.soldDate) {
+        // No soldDate exists, set it to current date
+        req.body.soldDate = new Date();
+      } else if (!req.body.soldDate) {
+        // soldDate exists but frontend didn't send it, preserve existing date
+        req.body.soldDate = listing.soldDate;
+      }
+      // If frontend sends soldDate explicitly, use it (allows manual override if needed)
+    } else if (req.body.isSold === false) {
+      // Clear soldDate when marking as unsold
+      req.body.soldDate = null;
     }
 
     const updatedListing = await Listing.findByIdAndUpdate(
@@ -409,10 +439,11 @@ const getListingsByAgent = async (req, res, next) => {
       isDeleted: { $ne: true }
     };
     
-    // For public pages (home, listing page, agent listing page), show only approved
-    // For agent dashboard, show all statuses (pending, approved, rejected)
+    // For public pages (home, listing page, agent listing page), show only approved and exclude sold
+    // For agent dashboard, show all statuses (pending, approved, rejected) including sold
     if (isPublic === 'true' || isPublic === true) {
       query.approvalStatus = 'approved';
+      query.isSold = { $ne: true }; // Exclude sold listings from public pages
     }
     
     // Add optional filters
@@ -464,6 +495,9 @@ const getFilteredListings = async (req, res, next) => {
     
     // Add filter to exclude deleted listings
     filters.isDeleted = { $ne: true };
+    
+    // Exclude sold listings from public pages
+    filters.isSold = { $ne: true };
     
     // For public search, show approved listings only
     // No listing will be published without admin approval
@@ -530,6 +564,13 @@ const getEachStateListing = async (req, res, next) => {
   try {
     const stateCounts = await Listing.aggregate([
       {
+        $match: {
+          isDeleted: { $ne: true },
+          isSold: { $ne: true }, // Exclude sold listings
+          approvalStatus: 'approved' // Only count approved listings
+        }
+      },
+      {
         $group: {
           _id: '$city', // Using city field instead of state
           count: { $sum: 1 }
@@ -573,13 +614,15 @@ const getMostVisitedListings = async (req, res, next) => {
     const isObjectId = mongoose.Types.ObjectId.isValid(agentId);
     const agentIdObj = isObjectId ? new mongoose.Types.ObjectId(agentId) : agentId;
     
-    // Match both agentId (new) and agent (legacy) fields, and exclude deleted listings
+    // Match both agentId (new) and agent (legacy) fields, exclude deleted and sold listings
     const listings = await Listing.find({
       $or: [
         { agentId: agentIdObj },
         { agent: agentId }
       ],
-      isDeleted: { $ne: true }
+      isDeleted: { $ne: true },
+      isSold: { $ne: true }, // Exclude sold listings from most visited
+      approvalStatus: 'approved' // Only show approved listings
     })
       .sort({ visitCount: -1 })
       .limit(10)

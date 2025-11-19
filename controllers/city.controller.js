@@ -10,10 +10,11 @@ const getCityStats = async (req, res, next) => {
     // Use aggregation to get counts for each city
     // This is much faster than fetching all listings and counting manually
     const cityStats = await Listing.aggregate([
-      // Match only non-deleted and approved listings
+      // Match only non-deleted, approved, and not sold listings
       {
         $match: {
           isDeleted: { $ne: true },
+          isSold: { $ne: true },
           approvalStatus: 'approved'
         }
       },
@@ -38,9 +39,10 @@ const getCityStats = async (req, res, next) => {
       }
     ]);
     
-    // Also get total count (only approved and non-deleted)
+    // Also get total count (only approved, non-deleted, and not sold)
     const totalCount = await Listing.countDocuments({
       isDeleted: { $ne: true },
+      isSold: { $ne: true },
       approvalStatus: 'approved'
     });
     
@@ -96,13 +98,14 @@ const getCityDetails = async (req, res, next) => {
       });
     }
     
-    // Get count for specific city (case-insensitive) - only approved
+    // Get count for specific city (case-insensitive) - only approved, not sold
     const count = await Listing.countDocuments({
       $or: [
         { city: { $regex: new RegExp(`^${cityName}$`, 'i') } },
         { state: { $regex: new RegExp(`^${cityName}$`, 'i') } } // Fallback to state for backward compatibility
       ],
       isDeleted: { $ne: true },
+      isSold: { $ne: true },
       approvalStatus: 'approved'
     });
     
@@ -115,6 +118,7 @@ const getCityDetails = async (req, res, next) => {
             { state: { $regex: new RegExp(`^${cityName}$`, 'i') } }
           ],
           isDeleted: { $ne: true },
+          isSold: { $ne: true },
           approvalStatus: 'approved'
         }
       },
@@ -158,16 +162,18 @@ const getCityDetails = async (req, res, next) => {
  */
 const getAllCities = async (req, res, next) => {
   try {
-    // Get distinct cities from database (only approved)
+    // Get distinct cities from database (only approved, not sold)
     const cities = await Listing.distinct('city', {
       isDeleted: { $ne: true },
+      isSold: { $ne: true },
       approvalStatus: 'approved',
       city: { $exists: true, $ne: null, $ne: '' }
     });
     
-    // Also get distinct states for backward compatibility (only approved)
+    // Also get distinct states for backward compatibility (only approved, not sold)
     const states = await Listing.distinct('state', {
       isDeleted: { $ne: true },
+      isSold: { $ne: true },
       approvalStatus: 'approved',
       state: { $exists: true, $ne: null, $ne: '' }
     });

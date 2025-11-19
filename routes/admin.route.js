@@ -6,6 +6,9 @@ const {
   getAllProperties,
   updatePropertyApproval,
   deleteProperty,
+  getSoldProperties,
+  updateSoldPropertyCharges,
+  getDeletedProperties,
   // Contacts
   getAllContacts,
   deleteContact,
@@ -31,6 +34,13 @@ router.get('/dashboard/stats', getDashboardStats);
 router.get('/properties', getAllProperties);
 router.put('/properties/:id/approval', updatePropertyApproval);
 router.delete('/properties/:id', deleteProperty);
+
+// Sold Properties
+router.get('/sold-properties', getSoldProperties);
+router.put('/sold-properties/:id/charges', updateSoldPropertyCharges);
+
+// Deleted Properties
+router.get('/deleted-properties', getDeletedProperties);
 
 // Contacts
 router.get('/contacts', getAllContacts);

@@ -50,7 +50,11 @@ const listingSchema = new mongoose.Schema(
       default: 'pending' 
     },
     isSold: { type: Boolean, default: false },
+    soldCharges: { type: Number, default: 0 }, // Charges/fees for sold listing record
+    soldDate: { type: Date }, // Date when property was marked as sold
     isDeleted: { type: Boolean, default: false },
+    deletedReason: { type: String, required: false }, // Reason for deletion
+    deletedAt: { type: Date }, // Date when property was deleted
     offer: { type: Boolean, required: false },
     visitCount: { type: Number, default: 0 },
     notes: { type: String, required: false }, // Additional notes about the property

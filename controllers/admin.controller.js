@@ -22,8 +22,12 @@ const getAllProperties = async (req, res, next) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Build query
-    const query = { isDeleted: { $ne: true } };
+    // Build query - exclude deleted and sold listings
+    // Sold listings should only appear in /admin/sold-properties
+    const query = { 
+      isDeleted: { $ne: true },
+      isSold: { $ne: true } // Exclude sold listings from admin properties page
+    };
     
     if (status) query.status = status;
     if (approvalStatus) query.approvalStatus = approvalStatus;
@@ -126,6 +130,7 @@ const updatePropertyApproval = async (req, res, next) => {
 const deleteProperty = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const { deletedReason } = req.body;
 
     const property = await Listing.findById(id);
     if (!property) {
@@ -133,11 +138,14 @@ const deleteProperty = async (req, res, next) => {
     }
 
     property.isDeleted = true;
+    property.deletedReason = deletedReason || 'Deleted by admin';
+    property.deletedAt = new Date();
     await property.save();
 
     logger.info('[ADMIN_DELETE_PROPERTY]', {
       propertyId: id,
-      adminId: req.user.id
+      adminId: req.user.id,
+      deletedReason: property.deletedReason
     });
 
     res.status(200).json({
@@ -146,6 +154,202 @@ const deleteProperty = async (req, res, next) => {
     });
   } catch (error) {
     logger.error('[ADMIN_DELETE_PROPERTY_ERROR]', {
+      error: error.message,
+      stack: error.stack
+    });
+    next(error);
+  }
+};
+
+// Get all deleted properties with filters and pagination
+const getDeletedProperties = async (req, res, next) => {
+  try {
+    const {
+      search,
+      propertyType,
+      city,
+      agentId,
+      page = 1,
+      limit = 20,
+      sortBy = 'deletedAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Build query - only deleted properties
+    const query = { 
+      isDeleted: true
+    };
+    
+    if (propertyType) query.propertyType = propertyType;
+    if (city) query.city = new RegExp(city, 'i');
+    if (agentId) {
+      query.$or = [
+        { agentId: agentId },
+        { agent: agentId }
+      ];
+    }
+    
+    if (search) {
+      query.$or = [
+        { propertyKeyword: new RegExp(search, 'i') },
+        { address: new RegExp(search, 'i') },
+        { city: new RegExp(search, 'i') },
+        { propertyDesc: new RegExp(search, 'i') },
+        { deletedReason: new RegExp(search, 'i') }
+      ];
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Execute query
+    const [properties, total] = await Promise.all([
+      Listing.find(query)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate('agentId', 'username email isBlocked blockedReason')
+        .lean(),
+      Listing.countDocuments(query)
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: properties,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    logger.error('[ADMIN_GET_DELETED_PROPERTIES_ERROR]', {
+      error: error.message,
+      stack: error.stack
+    });
+    next(error);
+  }
+};
+
+// Get all sold properties with filters and pagination
+const getSoldProperties = async (req, res, next) => {
+  try {
+    const {
+      search,
+      propertyType,
+      city,
+      agentId,
+      page = 1,
+      limit = 20,
+      sortBy = 'soldDate',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Build query - only sold properties
+    const query = { 
+      isDeleted: { $ne: true },
+      isSold: true
+    };
+    
+    if (propertyType) query.propertyType = propertyType;
+    if (city) query.city = new RegExp(city, 'i');
+    if (agentId) {
+      query.$or = [
+        { agentId: agentId },
+        { agent: agentId }
+      ];
+    }
+    
+    if (search) {
+      query.$or = [
+        { propertyKeyword: new RegExp(search, 'i') },
+        { address: new RegExp(search, 'i') },
+        { city: new RegExp(search, 'i') },
+        { propertyDesc: new RegExp(search, 'i') }
+      ];
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Execute query
+    const [properties, total] = await Promise.all([
+      Listing.find(query)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate('agentId', 'username email isBlocked blockedReason')
+        .lean(),
+      Listing.countDocuments(query)
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: properties,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    logger.error('[ADMIN_GET_SOLD_PROPERTIES_ERROR]', {
+      error: error.message,
+      stack: error.stack
+    });
+    next(error);
+  }
+};
+
+// Update sold property charges
+const updateSoldPropertyCharges = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { soldCharges } = req.body;
+
+    if (soldCharges === undefined || soldCharges === null) {
+      return next(errorHandler(400, 'soldCharges is required'));
+    }
+
+    const charges = parseFloat(soldCharges);
+    if (isNaN(charges) || charges < 0) {
+      return next(errorHandler(400, 'soldCharges must be a positive number'));
+    }
+
+    const property = await Listing.findById(id);
+    if (!property) {
+      return next(errorHandler(404, 'Property not found'));
+    }
+
+    if (!property.isSold) {
+      return next(errorHandler(400, 'Property is not marked as sold'));
+    }
+
+    property.soldCharges = charges;
+    if (!property.soldDate) {
+      property.soldDate = new Date();
+    }
+    await property.save();
+
+    logger.info('[ADMIN_UPDATE_SOLD_CHARGES]', {
+      propertyId: id,
+      soldCharges: charges,
+      adminId: req.user.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Sold property charges updated successfully',
+      data: property
+    });
+  } catch (error) {
+    logger.error('[ADMIN_UPDATE_SOLD_CHARGES_ERROR]', {
       error: error.message,
       stack: error.stack
     });
@@ -389,16 +593,44 @@ const getDashboardStats = async (req, res, next) => {
       pendingProperties,
       approvedProperties,
       rejectedProperties,
+      soldProperties,
+      deletedProperties,
       totalContacts,
       totalRentalServices,
       pendingRentalServices,
       totalAgents,
       blockedAgents
     ] = await Promise.all([
-      Listing.countDocuments({ isDeleted: { $ne: true } }),
-      Listing.countDocuments({ isDeleted: { $ne: true }, approvalStatus: 'pending' }),
-      Listing.countDocuments({ isDeleted: { $ne: true }, approvalStatus: 'approved' }),
-      Listing.countDocuments({ isDeleted: { $ne: true }, approvalStatus: 'rejected' }),
+      // Total properties: not deleted and not sold (using $ne for cleaner query)
+      Listing.countDocuments({ 
+        isDeleted: { $ne: true },
+        isSold: { $ne: true }
+      }),
+      // Pending properties: not deleted, not sold, and pending
+      Listing.countDocuments({ 
+        isDeleted: { $ne: true },
+        isSold: { $ne: true },
+        approvalStatus: 'pending'
+      }),
+      // Approved properties: not deleted, not sold, and approved
+      Listing.countDocuments({ 
+        isDeleted: { $ne: true },
+        isSold: { $ne: true },
+        approvalStatus: 'approved'
+      }),
+      // Rejected properties: not deleted, not sold, and rejected
+      Listing.countDocuments({ 
+        isDeleted: { $ne: true },
+        isSold: { $ne: true },
+        approvalStatus: 'rejected'
+      }),
+      // Sold properties: not deleted and sold (must check isSold explicitly)
+      Listing.countDocuments({ 
+        isDeleted: { $ne: true },
+        isSold: true
+      }),
+      // Deleted properties: deleted (must check isDeleted explicitly)
+      Listing.countDocuments({ isDeleted: true }),
       Contact.countDocuments(),
       PropertyRental.countDocuments(),
       PropertyRental.countDocuments({ status: 'pending' }),
@@ -411,8 +643,27 @@ const getDashboardStats = async (req, res, next) => {
       totalAgents,
       blockedAgents,
       totalProperties,
+      pendingProperties,
+      approvedProperties,
+      rejectedProperties,
+      soldProperties,
+      deletedProperties,
       totalContacts,
-      totalRentalServices
+      totalRentalServices,
+      pendingRentalServices
+    });
+    
+    // Additional verification: count all listings to verify totals
+    const allListingsCount = await Listing.countDocuments({});
+    const allSoldCount = await Listing.countDocuments({ isSold: true });
+    const allDeletedCount = await Listing.countDocuments({ isDeleted: true });
+    
+    logger.info('[ADMIN_DASHBOARD_STATS_VERIFICATION]', {
+      allListingsCount,
+      allSoldCount,
+      allDeletedCount,
+      calculatedSold: soldProperties,
+      calculatedDeleted: deletedProperties
     });
 
     res.status(200).json({
@@ -422,7 +673,9 @@ const getDashboardStats = async (req, res, next) => {
           total: totalProperties,
           pending: pendingProperties,
           approved: approvedProperties,
-          rejected: rejectedProperties
+          rejected: rejectedProperties,
+          sold: soldProperties,
+          deleted: deletedProperties
         },
         contacts: {
           total: totalContacts
@@ -628,6 +881,9 @@ module.exports = {
   getAllProperties,
   updatePropertyApproval,
   deleteProperty,
+  getSoldProperties,
+  updateSoldPropertyCharges,
+  getDeletedProperties,
   // Contacts
   getAllContacts,
   deleteContact,
