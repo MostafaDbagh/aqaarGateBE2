@@ -55,7 +55,11 @@ const createAgent = async (req, res, next) => {
 const getAgents = async (req, res, next) => {
   try {
     // Get all users with role='agent' from the users collection
-    const agentUsers = await User.find({ role: 'agent' })
+    // Exclude blocked agents from public listing
+    const agentUsers = await User.find({ 
+      role: 'agent',
+      isBlocked: { $ne: true } // Exclude blocked agents
+    })
       .select('-password -__v') // Don't return password or version field
       .lean();
     
