@@ -287,6 +287,37 @@ const deleteListing = async (req, res, next) => {
     listing.deletedAt = new Date();
     await listing.save();
 
+    // Delete all favorites associated with this deleted listing
+    // This ensures favorites count is accurate and users don't see deleted listings in favorites
+    const Favorite = require('../models/favorite.model');
+    const deleteFavoritesResult = await Favorite.deleteMany({ 
+      propertyId: listing._id 
+    });
+    
+    if (deleteFavoritesResult.deletedCount > 0) {
+      logger.info(`Deleted ${deleteFavoritesResult.deletedCount} favorites for deleted listing ${listing._id}`);
+    }
+
+    // Delete all reviews associated with this deleted listing
+    const Review = require('../models/review.model');
+    const deleteReviewsResult = await Review.deleteMany({ 
+      propertyId: listing._id 
+    });
+    
+    if (deleteReviewsResult.deletedCount > 0) {
+      logger.info(`Deleted ${deleteReviewsResult.deletedCount} reviews for deleted listing ${listing._id}`);
+    }
+
+    // Delete all messages associated with this deleted listing
+    const Message = require('../models/message.model');
+    const deleteMessagesResult = await Message.deleteMany({ 
+      propertyId: listing._id 
+    });
+    
+    if (deleteMessagesResult.deletedCount > 0) {
+      logger.info(`Deleted ${deleteMessagesResult.deletedCount} messages for deleted listing ${listing._id}`);
+    }
+
     res.status(200).json({
       success: true,
       message: 'Listing has been deleted!',

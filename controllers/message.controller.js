@@ -112,18 +112,124 @@ const getMessagesByAgent = async (req, res, next) => {
     }
 
     // Get messages with pagination and populate property details
-    const messages = await Message.find(filter)
-      .populate('propertyId', 'propertyId propertyKeyword propertyPrice status propertyType images address')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    // Filter out messages for deleted listings using aggregation
+    const messagesAggregation = await Message.aggregate([
+      { $match: filter },
+      {
+        $lookup: {
+          from: 'listings',
+          localField: 'propertyId',
+          foreignField: '_id',
+          as: 'property'
+        }
+      },
+      {
+        $match: {
+          $or: [
+            { 'property.isDeleted': { $ne: true } },
+            { 'property': { $size: 0 } } // Include messages with no property (shouldn't happen, but safe)
+          ]
+        }
+      },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: 'listings',
+          localField: 'propertyId',
+          foreignField: '_id',
+          as: 'propertyDetails'
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          propertyId: 1,
+          agentId: 1,
+          senderName: 1,
+          senderEmail: 1,
+          senderPhone: 1,
+          subject: 1,
+          message: 1,
+          messageType: 1,
+          status: 1,
+          reply: 1,
+          repliedAt: 1,
+          archived: 1,
+          archivedAt: 1,
+          ipAddress: 1,
+          userAgent: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          propertyId: {
+            $arrayElemAt: ['$propertyDetails', 0]
+          }
+        }
+      }
+    ]);
 
-    // Get total count for pagination
-    const total = await Message.countDocuments(filter);
+    // Convert aggregation results to match the expected format
+    const messages = messagesAggregation.map(msg => {
+      const messageObj = msg;
+      // Ensure propertyId is populated correctly
+      if (messageObj.propertyId && typeof messageObj.propertyId === 'object') {
+        messageObj.propertyId = {
+          _id: messageObj.propertyId._id,
+          propertyId: messageObj.propertyId.propertyId,
+          propertyKeyword: messageObj.propertyId.propertyKeyword,
+          propertyPrice: messageObj.propertyId.propertyPrice,
+          status: messageObj.propertyId.status,
+          propertyType: messageObj.propertyId.propertyType,
+          images: messageObj.propertyId.images,
+          address: messageObj.propertyId.address
+        };
+      }
+      return messageObj;
+    });
 
-    // Get statistics - use same filter logic
+    // Get total count for pagination (excluding deleted listings)
+    const totalAggregation = await Message.aggregate([
+      { $match: filter },
+      {
+        $lookup: {
+          from: 'listings',
+          localField: 'propertyId',
+          foreignField: '_id',
+          as: 'property'
+        }
+      },
+      {
+        $match: {
+          $or: [
+            { 'property.isDeleted': { $ne: true } },
+            { 'property': { $size: 0 } }
+          ]
+        }
+      },
+      { $count: 'total' }
+    ]);
+    const total = totalAggregation[0]?.total || 0;
+
+    // Get statistics - use same filter logic (excluding deleted listings)
     const stats = await Message.aggregate([
       { $match: filter },
+      {
+        $lookup: {
+          from: 'listings',
+          localField: 'propertyId',
+          foreignField: '_id',
+          as: 'property'
+        }
+      },
+      {
+        $match: {
+          $or: [
+            { 'property.isDeleted': { $ne: true } },
+            { 'property': { $size: 0 } }
+          ]
+        }
+      },
       {
         $group: {
           _id: '$status',

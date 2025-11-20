@@ -89,10 +89,45 @@ const deleteUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
     return next(errorHandler(401, 'You can only delete your own account!'));
   try {
-    await User.findByIdAndDelete(req.params.id);
+    const userId = req.params.id;
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return next(errorHandler(404, 'User not found!'));
+    }
+
+    // Store user email and role before deletion for logging
+    const userEmail = user.email;
+    const userRole = user.role;
+
+    // If user is an agent, delete all their listings permanently
+    if (user.role === 'agent') {
+      const Listing = require('../models/listing.model');
+      // Permanently delete all listings associated with this agent
+      const deleteResult = await Listing.deleteMany({ 
+        $or: [
+          { agentId: userId },
+          { agent: user.email }
+        ]
+      });
+      console.log(`Deleted ${deleteResult.deletedCount} listings for agent ${userEmail} (${userId})`);
+    }
+
+    // Permanently delete the user account from database
+    // This ensures the user won't appear in agents list and can't login again
+    await User.findByIdAndDelete(userId);
+    
+    // Clear the access token cookie
     res.clearCookie('access_token');
-    res.status(200).json('User has been deleted!');
+    
+    console.log(`User account deleted: ${userEmail} (${userId}), Role: ${userRole}`);
+    
+    res.status(200).json({
+      success: true,
+      message: 'User account has been permanently deleted!'
+    });
   } catch (error) {
+    console.error('Error deleting user account:', error);
     next(error);
   }
 };

@@ -168,16 +168,23 @@ const getFavorites = async (req, res, next) => {
       ]
     };
 
-    // Get total count for pagination
-    const totalFavorites = await Favorite.countDocuments(favoriteFilter);
+    // Get all favorites first, then filter out deleted listings
+    const allFavorites = await Favorite.find(favoriteFilter)
+      .populate({
+        path: 'propertyId',
+        match: { isDeleted: { $ne: true } } // Only populate non-deleted listings
+      })
+      .sort({ createdAt: -1 });
+
+    // Filter out favorites where propertyId is null (deleted listings)
+    const validFavorites = allFavorites.filter(fav => fav.propertyId !== null);
+
+    // Get total count (only non-deleted listings)
+    const totalFavorites = validFavorites.length;
     const totalPages = Math.ceil(totalFavorites / limit);
 
     // Get paginated favorites
-    const favorites = await Favorite.find(favoriteFilter)
-      .populate('propertyId')
-      .sort({ createdAt: -1 }) // Newest first
-      .skip(skip)
-      .limit(limit);
+    const favorites = validFavorites.slice(skip, skip + limit);
 
     res.status(200).json({
       success: true,

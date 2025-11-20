@@ -152,14 +152,31 @@ const sendOTP = async (req, res, next) => {
       });
     }
 
+    // Normalize email (lowercase, trim)
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format',
+        error: 'INVALID_EMAIL_FORMAT'
+      });
+    }
+
     // For forgot password, check if user exists
     if (type === 'forgot_password') {
-      const user = await User.findOne({ email });
+      const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'User not found with this email',
-          error: 'USER_NOT_FOUND'
+        // Don't reveal if user exists or not for security (prevent email enumeration)
+        // Return success message but don't send OTP
+        logger.warn('Password reset requested for non-existent email', { email: normalizedEmail });
+        return res.status(200).json({
+          success: true,
+          message: 'If an account exists with this email, a reset code has been sent.',
+          email: normalizedEmail,
+          type: type
         });
       }
     }
@@ -171,7 +188,14 @@ const sendOTP = async (req, res, next) => {
     if (!global.otpStore) {
       global.otpStore = new Map();
     }
-    global.otpStore.set(`${email}_${type}`, {
+    
+    // Delete any existing OTP for this email/type before creating new one
+    const otpKey = `${normalizedEmail}_${type}`;
+    if (global.otpStore.has(otpKey)) {
+      global.otpStore.delete(otpKey);
+    }
+    
+    global.otpStore.set(otpKey, {
       otp: otp,
       type: type,
       timestamp: Date.now(),
@@ -185,7 +209,7 @@ const sendOTP = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: `OTP sent successfully for ${type === 'signup' ? 'email verification' : 'password reset'}`,
-      email: email,
+      email: normalizedEmail,
       type: type,
       ...(process.env.NODE_ENV !== 'production' ? { otp } : {})
     });
@@ -196,17 +220,17 @@ const sendOTP = async (req, res, next) => {
       for (let i = 0; i <= retries; i++) {
         try {
           await sendOtpEmail({
-            to: email,
+            to: normalizedEmail,
             otp,
             type,
           });
           // Always log email success (not just in dev)
-          logger.error('[EMAIL_SUCCESS] OTP email sent successfully', { email, type, attempt: i + 1 });
+          logger.error('[EMAIL_SUCCESS] OTP email sent successfully', { email: normalizedEmail, type, attempt: i + 1 });
           return; // Success, exit retry loop
         } catch (emailError) {
           const isLastAttempt = i === retries;
           logger.error(`Failed to send OTP email (attempt ${i + 1}/${retries + 1})`, {
-            email,
+            email: normalizedEmail,
             type,
             attempt: i + 1,
             error: emailError.message,
@@ -217,12 +241,12 @@ const sendOTP = async (req, res, next) => {
           if (isLastAttempt && process.env.SENDGRID_API_KEY) {
             try {
               const { sendOtpEmailSendGrid } = require('../utils/email-sendgrid');
-              await sendOtpEmailSendGrid({ to: email, otp, type });
-              logger.error('[EMAIL_SUCCESS] SendGrid fallback email sent successfully', { email, type });
+              await sendOtpEmailSendGrid({ to: normalizedEmail, otp, type });
+              logger.error('[EMAIL_SUCCESS] SendGrid fallback email sent successfully', { email: normalizedEmail, type });
               return; // SendGrid succeeded
             } catch (sendGridError) {
               logger.error('SendGrid fallback also failed:', {
-                email,
+                email: normalizedEmail,
                 type,
                 error: sendGridError.message
               });
@@ -233,7 +257,7 @@ const sendOTP = async (req, res, next) => {
             // All retries failed - but KEEP OTP in store for manual verification
             // Don't delete it so support can help users in restricted regions
             logger.error('OTP email failed after all retries - OTP kept in store for manual verification', {
-              email,
+              email: normalizedEmail,
               type,
               otp: process.env.NODE_ENV !== 'production' ? otp : '***' // Only log OTP in dev
             });
@@ -248,7 +272,7 @@ const sendOTP = async (req, res, next) => {
     // Start email sending in background
     sendEmailWithRetry().catch((finalError) => {
       logger.error('Email retry mechanism failed completely', {
-        email,
+        email: normalizedEmail,
         type,
         error: finalError.message
       });
@@ -272,6 +296,18 @@ const verifyOTP = async (req, res, next) => {
       });
     }
 
+    // Normalize email
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // Validate OTP format (must be exactly 6 digits)
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({
+        success: false,
+        message: 'OTP must be exactly 6 digits',
+        error: 'INVALID_OTP_FORMAT'
+      });
+    }
+
     if (!type || !['signup', 'forgot_password'].includes(type)) {
       return res.status(400).json({
         success: false,
@@ -280,7 +316,7 @@ const verifyOTP = async (req, res, next) => {
       });
     }
 
-    const otpKey = `${email}_${type}`;
+    const otpKey = `${normalizedEmail}_${type}`;
     
     // Check if OTP exists in store
     if (!global.otpStore || !global.otpStore.has(otpKey)) {
@@ -326,13 +362,35 @@ const verifyOTP = async (req, res, next) => {
       });
     }
 
-    // OTP is valid, remove it from store
+    // OTP is valid
+    // For forgot_password, create a verified flag before deleting OTP
+    // This allows resetPassword to verify that OTP was checked
+    if (type === 'forgot_password') {
+      // Create a verified store if it doesn't exist
+      if (!global.verifiedStore) {
+        global.verifiedStore = new Map();
+      }
+      // Store verification with expiration (10 minutes to reset password)
+      const verifiedKey = `${normalizedEmail}_forgot_password_verified`;
+      // Delete any existing verified flag for this email
+      if (global.verifiedStore.has(verifiedKey)) {
+        global.verifiedStore.delete(verifiedKey);
+      }
+      global.verifiedStore.set(verifiedKey, {
+        email: normalizedEmail,
+        timestamp: Date.now(),
+        expiresAt: Date.now() + (10 * 60 * 1000) // 10 minutes
+      });
+      logger.info('OTP verified for password reset', { email: normalizedEmail });
+    }
+    
+    // Remove OTP from store after verification
     global.otpStore.delete(otpKey);
 
     res.status(200).json({
       success: true,
       message: `OTP verified successfully for ${type === 'signup' ? 'email verification' : 'password reset'}`,
-      email: email,
+      email: normalizedEmail,
       type: type
     });
   } catch (error) {
@@ -352,20 +410,54 @@ const resetPassword = async (req, res, next) => {
       });
     }
 
-    // Check if OTP was verified for this email (OTP should be removed after verification)
-    const otpKey = `${email}_forgot_password`;
+    // Validate password length
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long',
+        error: 'INVALID_PASSWORD'
+      });
+    }
+
+    // Check if OTP was verified for this email
+    const otpKey = `${normalizedEmail}_forgot_password`;
+    const verifiedKey = `${normalizedEmail}_forgot_password_verified`;
     
-    // If OTP still exists, it means it wasn't verified properly
+    // Check if OTP still exists (means it wasn't verified)
     if (global.otpStore && global.otpStore.has(otpKey)) {
       return res.status(400).json({
         success: false,
-        message: 'Please verify OTP first',
+        message: 'Please verify OTP first before resetting password',
         error: 'OTP_NOT_VERIFIED'
       });
     }
 
+    // Check if email was verified (using verified store)
+    if (!global.verifiedStore || !global.verifiedStore.has(verifiedKey)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please verify OTP first before resetting password',
+        error: 'OTP_NOT_VERIFIED'
+      });
+    }
+
+    // Check if verification is still valid (not expired)
+    const verifiedData = global.verifiedStore.get(verifiedKey);
+    const now = Date.now();
+    if (now > verifiedData.expiresAt) {
+      global.verifiedStore.delete(verifiedKey);
+      return res.status(400).json({
+        success: false,
+        message: 'OTP verification has expired. Please request a new OTP',
+        error: 'VERIFICATION_EXPIRED'
+      });
+    }
+
+    // Verification is valid, remove it after password reset
+    global.verifiedStore.delete(verifiedKey);
+
     // Find user and update password
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -375,16 +467,19 @@ const resetPassword = async (req, res, next) => {
     }
 
     // Hash new password
-    const hashedPassword = bcryptjs.hashSync(newPassword, 10);
+    const hashedPassword = bcryptjs.hashSync(newPassword.trim(), 10);
     
     // Update user password
     await User.findByIdAndUpdate(user._id, { password: hashedPassword });
+
+    logger.info('Password reset successful', { email: normalizedEmail, userId: user._id });
 
     res.status(200).json({
       success: true,
       message: 'Password reset successfully'
     });
   } catch (error) {
+    logger.error('Password reset error', { error: error.message, email: req.body.email });
     next(error);
   }
 };
