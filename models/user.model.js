@@ -76,6 +76,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    whatsapp: {
+      type: String,
+      default: '',
+    },
     // Agent-specific fields
     posterImage: {
       type: String,
