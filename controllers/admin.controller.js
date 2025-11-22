@@ -699,6 +699,75 @@ const getDashboardStats = async (req, res, next) => {
   }
 };
 
+// ==================== USERS ====================
+
+// Get all users (read-only)
+const getAllUsers = async (req, res, next) => {
+  try {
+    const {
+      search,
+      role,
+      isBlocked,
+      page = 1,
+      limit = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Build query
+    const query = {};
+    
+    if (role) {
+      query.role = role;
+    }
+    
+    if (isBlocked !== undefined) {
+      query.isBlocked = isBlocked === 'true';
+    }
+    
+    if (search) {
+      query.$or = [
+        { username: new RegExp(search, 'i') },
+        { email: new RegExp(search, 'i') },
+        { phone: new RegExp(search, 'i') }
+      ];
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Execute query - exclude password field
+    const [users, total] = await Promise.all([
+      User.find(query)
+        .select('-password -__v')
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      User.countDocuments(query)
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: users,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    logger.error('[ADMIN_GET_USERS_ERROR]', {
+      error: error.message,
+      stack: error.stack
+    });
+    next(error);
+  }
+};
+
 // ==================== AGENTS ====================
 
 // Get all agents
@@ -891,6 +960,8 @@ module.exports = {
   getAllRentalServices,
   updateRentalService,
   deleteRentalService,
+  // Users
+  getAllUsers,
   // Agents
   getAllAgents,
   blockAgent,

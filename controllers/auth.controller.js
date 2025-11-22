@@ -505,16 +505,28 @@ const makeAgent = async (req, res, next) => {
       });
     }
 
-    // Update user role to agent
+    // Update user role to agent and set as blocked by default (requires admin verification)
     const updatedUser = await User.findByIdAndUpdate(
       userId, 
-      { role: 'agent' }, 
+      { 
+        role: 'agent',
+        isBlocked: true,
+        blockedAt: new Date(),
+        blockedReason: 'New agent - pending admin verification'
+      }, 
       { new: true }
     );
 
+    logger.info('[MAKE_AGENT]', {
+      userId: userId,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      isBlocked: updatedUser.isBlocked
+    });
+
     res.status(200).json({
       success: true,
-      message: 'User role updated to agent successfully',
+      message: 'User role updated to agent successfully. Your account is pending admin verification.',
       user: {
         _id: updatedUser._id,
         username: updatedUser.username,
@@ -523,7 +535,9 @@ const makeAgent = async (req, res, next) => {
         avatar: updatedUser.avatar,
         pointsBalance: updatedUser.pointsBalance,
         packageType: updatedUser.packageType,
-        packageExpiry: updatedUser.packageExpiry
+        packageExpiry: updatedUser.packageExpiry,
+        isBlocked: updatedUser.isBlocked,
+        blockedReason: updatedUser.blockedReason
       }
     });
   } catch (error) {

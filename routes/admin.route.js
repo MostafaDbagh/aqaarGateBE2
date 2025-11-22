@@ -16,6 +16,8 @@ const {
   getAllRentalServices,
   updateRentalService,
   deleteRentalService,
+  // Users
+  getAllUsers,
   // Agents
   getAllAgents,
   blockAgent,
@@ -50,6 +52,9 @@ router.delete('/contacts/:id', deleteContact);
 router.get('/rental-services', getAllRentalServices);
 router.put('/rental-services/:id', updateRentalService);
 router.delete('/rental-services/:id', deleteRentalService);
+
+// Users (read-only)
+router.get('/users', getAllUsers);
 
 // Agents
 router.get('/agents', getAllAgents);
