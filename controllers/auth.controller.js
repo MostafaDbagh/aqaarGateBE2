@@ -6,17 +6,30 @@ const logger = require('../utils/logger');
 const { sendOtpEmail } = require('../utils/email');
 
 const signup = async (req, res, next) => {
-  const { username, email, password, role } = req.body;
+  const { username, email, password, role, phone, company, job } = req.body;
   const hashedPassword = bcryptjs.hashSync(password, 10);
-  // Set isTrial to true for new users (allows free posting during trial)
-  const newUser = new User({ 
+  
+  // Build user object with optional agent fields
+  const userData = { 
     username, 
     email, 
     password: hashedPassword, 
     role,
     isTrial: true, // New users get trial period
     hasUnlimitedPoints: false // Default to false, can be set to true later
-  });
+  };
+  
+  // Add agent-specific fields if role is agent
+  if (role === 'agent') {
+    if (phone) userData.phone = phone;
+    if (company) userData.company = company;
+    if (job) userData.job = job;
+    // Set new agents as blocked by default until admin verification
+    userData.isBlocked = true;
+    userData.blockedReason = 'Pending admin verification';
+  }
+  
+  const newUser = new User(userData);
   try {
     await newUser.save();
     res.status(201).json({
