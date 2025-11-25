@@ -1,0 +1,75 @@
+{
+  "listing": {
+    "not_found": "Listing not found",
+    "search_success": "Listings retrieved successfully",
+    "fetch_success": "Listing retrieved successfully"
+  },
+  "agent": {
+    "not_found": "Agent not found",
+    "fetch_success": "Agents retrieved successfully",
+    "fetch_one_success": "Agent retrieved successfully"
+  },
+  "city": {
+    "fetch_success": "Cities retrieved successfully",
+    "fetch_one_success": "City details retrieved successfully",
+    "not_found": "City not found"
+  },
+  "category": {
+    "fetch_success": "Categories retrieved successfully",
+    "fetch_one_success": "Category details retrieved successfully",
+    "not_found": "Category not found"
+  },
+  "error": {
+    "not_found": "Resource not found",
+    "server_error": "Internal server error"
+  },
+  "propertyType": {
+    "Apartment": "Apartment",
+    "Villa/farms": "Villa/Farms",
+    "Villa/Farms": "Villa/Farms",
+    "Villa": "Villa",
+    "Office": "Office",
+    "Commercial": "Commercial",
+    "Land": "Land",
+    "Land/Plot": "Land/Plot",
+    "Holiday Home": "Holiday Home",
+    "Holiday Homes": "Holiday Homes"
+  },
+  "status": {
+    "sale": "For Sale",
+    "rent": "For Rent"
+  },
+  "rentType": {
+    "monthly": "Monthly",
+    "three-month": "Three Months",
+    "six-month": "Six Months",
+    "one-year": "One Year",
+    "yearly": "Yearly",
+    "weekly": "Weekly",
+    "daily": "Daily",
+    "one-week": "One Week",
+    "two-week": "Two Weeks"
+  },
+  "currency": {
+    "USD": "USD",
+    "SYP": "SYP",
+    "TRY": "TRY",
+    "EUR": "EUR"
+  },
+  "cities": {
+    "Damascus": "Damascus",
+    "Aleppo": "Aleppo",
+    "Homs": "Homs",
+    "Latakia": "Latakia",
+    "Tartus": "Tartus",
+    "Daraa": "Daraa",
+    "Hama": "Hama",
+    "Idlib": "Idlib",
+    "Der El Zor": "Der El Zor"
+  },
+  "approvalStatus": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected"
+  }
+}

@@ -398,9 +398,12 @@ const updateListing = async (req, res, next) => {
 };
 const getListingById = async (req, res, next) => {
   try {
+    const { translateListing } = require('../utils/translateData');
+    
     const listing = await Listing.findById(req.params.id).lean();
     if (!listing) {
-      return next(errorHandler(404, 'Listing not found!'));
+      const message = req.t ? req.t('listing.not_found') : 'Listing not found!';
+      return next(errorHandler(404, message));
     }
     
     // If agentId exists, fetch agent data (agents are Users with role='agent')
@@ -435,7 +438,10 @@ const getListingById = async (req, res, next) => {
       }
     }
     
-    res.status(200).json(listing);
+    // Translate listing if translation function is available
+    const translatedListing = req.t ? translateListing(listing, req.t) : listing;
+    
+    res.status(200).json(translatedListing);
   } catch (error) {
     next(error);
   }
@@ -499,9 +505,13 @@ const getListingsByAgent = async (req, res, next) => {
       Listing.countDocuments(query)
     ]);
     
+    // Translate listings if translation function is available
+    const { translateListings } = require('../utils/translateData');
+    const translatedListings = req.t ? translateListings(listings, req.t) : listings;
+    
     res.status(200).json({
       success: true,
-      data: listings,
+      data: translatedListings,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -517,6 +527,7 @@ const getListingsByAgent = async (req, res, next) => {
 const getFilteredListings = async (req, res, next) => {
   try {
     const logger = require('../utils/logger');
+    const { translateListings } = require('../utils/translateData');
     
     // Get filters and sort options from middleware
     const filters = req.filter || {};
@@ -563,6 +574,9 @@ const getFilteredListings = async (req, res, next) => {
       });
     }
     
+    // Translate listings if translation function is available
+    const translatedListings = req.t ? translateListings(listings, req.t) : listings;
+    
     logger.debug('getFilteredListings - found', listings.length, 'listings');
     
     // Log sample of listings for debugging
@@ -584,7 +598,7 @@ const getFilteredListings = async (req, res, next) => {
       logger.debug('Non-deleted listings in database:', nonDeletedCount);
     }
     
-    res.status(200).json(listings);
+    res.status(200).json(translatedListings);
   } catch (error) {
     logger.error('getFilteredListings error:', error);
     next(error);
@@ -667,7 +681,11 @@ const getMostVisitedListings = async (req, res, next) => {
       agent: listings[0].agent
     } : 'none');
     
-    res.status(200).json(listings);
+    // Translate listings if translation function is available
+    const { translateListings } = require('../utils/translateData');
+    const translatedListings = req.t ? translateListings(listings, req.t) : listings;
+    
+    res.status(200).json(translatedListings);
   } catch (error) {
     logger.error('getMostVisitedListings error:', error);
     next(error);

@@ -70,10 +70,15 @@ const getCityStats = async (req, res, next) => {
     logger.info(`City stats fetched: ${citiesWithImages.length} cities, total: ${totalCount} listings`);
     logger.debug('City stats:', citiesWithImages);
     
+    // Translate cities if translation function is available
+    const { translateCities } = require('../utils/translateData');
+    const translatedCities = req.t ? translateCities(citiesWithImages, req.t) : citiesWithImages;
+    
     res.status(200).json({
       success: true,
+      message: req.t ? req.t('city.fetch_success') : 'Cities retrieved successfully',
       data: {
-        cities: citiesWithImages,
+        cities: translatedCities,
         total: totalCount,
         timestamp: new Date().toISOString()
       }
@@ -138,10 +143,22 @@ const getCityDetails = async (req, res, next) => {
       maxPrice: 0
     };
     
+    // Translate city name if translation function is available
+    let translatedCityName = cityName;
+    if (req.t) {
+      const cityKey = `cities.${cityName}`;
+      const translated = req.t(cityKey);
+      if (translated && translated !== cityKey) {
+        translatedCityName = translated;
+      }
+    }
+    
     res.status(200).json({
       success: true,
+      message: req.t ? req.t('city.fetch_one_success') : 'City details retrieved successfully',
       data: {
-        city: cityName,
+        city: translatedCityName,
+        cityOriginal: cityName, // Keep original for filtering
         count,
         priceStats: {
           average: Math.round(stats.avgPrice || 0),

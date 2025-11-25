@@ -81,10 +81,15 @@ const getAgents = async (req, res, next) => {
       updatedAt: user.updatedAt
     }));
     
+    // Translate agents if translation function is available
+    const { translateAgents } = require('../utils/translateAgent');
+    const translatedAgents = req.t ? translateAgents(agents, req.t) : agents;
+    
     res.status(200).json({
       success: true,
-      data: agents,
-      total: agents.length
+      message: req.t ? req.t('agent.fetch_success') : 'Agents retrieved successfully',
+      data: translatedAgents,
+      total: translatedAgents.length
     });
   } catch (error) {
     next(error);
@@ -127,13 +132,19 @@ const getAgentById = async (req, res, next) => {
           updatedAt: agent.updatedAt
         };
       } else {
-        return next(errorHandler(404, 'Agent not found'));
+        const message = req.t ? req.t('agent.not_found') : 'Agent not found';
+        return next(errorHandler(404, message));
       }
     }
     
+    // Translate agent if translation function is available
+    const { translateAgent } = require('../utils/translateAgent');
+    const translatedAgent = req.t ? translateAgent(agent, req.t) : agent;
+    
     res.status(200).json({
       success: true,
-      data: agent
+      message: req.t ? req.t('agent.fetch_one_success') : 'Agent retrieved successfully',
+      data: translatedAgent
     });
   } catch (error) {
     next(error);

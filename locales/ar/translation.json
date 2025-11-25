@@ -1,0 +1,75 @@
+{
+  "listing": {
+    "not_found": "القائمة غير موجودة",
+    "search_success": "تم جلب القوائم بنجاح",
+    "fetch_success": "تم جلب القائمة بنجاح"
+  },
+  "agent": {
+    "not_found": "الوكيل غير موجود",
+    "fetch_success": "تم جلب الوكلاء بنجاح",
+    "fetch_one_success": "تم جلب الوكيل بنجاح"
+  },
+  "city": {
+    "fetch_success": "تم جلب المدن بنجاح",
+    "fetch_one_success": "تم جلب تفاصيل المدينة بنجاح",
+    "not_found": "المدينة غير موجودة"
+  },
+  "category": {
+    "fetch_success": "تم جلب الفئات بنجاح",
+    "fetch_one_success": "تم جلب تفاصيل الفئة بنجاح",
+    "not_found": "الفئة غير موجودة"
+  },
+  "error": {
+    "not_found": "المورد غير موجود",
+    "server_error": "خطأ في الخادم"
+  },
+  "propertyType": {
+    "Apartment": "شقة",
+    "Villa/farms": "فيلا/مزرعة",
+    "Villa/Farms": "فيلا/مزرعة",
+    "Villa": "فيلا",
+    "Office": "مكتب",
+    "Commercial": "تجاري",
+    "Land": "أرض",
+    "Land/Plot": "أرض/قطعة",
+    "Holiday Home": "بيت عطلة",
+    "Holiday Homes": "بيوت عطلة"
+  },
+  "status": {
+    "sale": "للبيع",
+    "rent": "للإيجار"
+  },
+  "rentType": {
+    "monthly": "شهري",
+    "three-month": "ثلاثة أشهر",
+    "six-month": "ستة أشهر",
+    "one-year": "سنة واحدة",
+    "yearly": "سنوي",
+    "weekly": "أسبوعي",
+    "daily": "يومي",
+    "one-week": "أسبوع واحد",
+    "two-week": "أسبوعان"
+  },
+  "currency": {
+    "USD": "USD",
+    "SYP": "SYP",
+    "TRY": "TRY",
+    "EUR": "EUR"
+  },
+  "cities": {
+    "Damascus": "دمشق",
+    "Aleppo": "حلب",
+    "Homs": "حمص",
+    "Latakia": "اللاذقية",
+    "Tartus": "طرطوس",
+    "Daraa": "درعا",
+    "Hama": "حماة",
+    "Idlib": "إدلب",
+    "Der El Zor": "دير الزور"
+  },
+  "approvalStatus": {
+    "pending": "قيد الانتظار",
+    "approved": "موافق عليه",
+    "rejected": "مرفوض"
+  }
+}

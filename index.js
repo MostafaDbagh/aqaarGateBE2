@@ -8,10 +8,14 @@ try {
   // sendgrid.env is optional, ignore if it doesn't exist
 }
 
+// Initialize i18n BEFORE Express app
+require('./i18n');
+
 const express = require('express');
 const db = require('./db/connect');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const i18nMiddleware = require('./middleware/i18n');
 
 const app = express();
 
@@ -180,18 +184,19 @@ const adminRoutes = require('./routes/admin.route');
 
 app.use('/api/auth', authRouter);
 app.use('/api/user', userRouter);
-app.use('/api/listing', listingRouter);
+// Apply i18n middleware only to public GET endpoints for guests
+app.use('/api/listing', i18nMiddleware, listingRouter);
 app.use('/api/review', reviewRouter);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/favorites', favoriteRoutes);
-app.use('/api/agents', agentRoutes);
+app.use('/api/agents', i18nMiddleware, agentRoutes);
 app.use('/api/points', pointRoutes);
 app.use('/api/message', messageRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/blog', blogRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/cities', cityRoutes);
+app.use('/api/categories', i18nMiddleware, categoryRoutes);
+app.use('/api/cities', i18nMiddleware, cityRoutes);
 app.use('/api/property-rental', propertyRentalRoutes);
 app.use('/api/admin', adminRoutes);
 

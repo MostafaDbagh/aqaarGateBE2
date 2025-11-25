@@ -78,10 +78,25 @@ const getCategoryStats = async (req, res, next) => {
     logger.info(`Category stats fetched: ${stats.length} categories, total: ${totalCount} listings`);
     logger.debug('Category stats:', stats);
     
+    // Translate categories if translation function is available
+    const { translateCategories } = require('../utils/translateData');
+    
+    // Debug: Log language and test translation
+    if (req.language) {
+      logger.debug(`[Category Controller] Language: ${req.language}, has req.t: ${!!req.t}`);
+      if (req.t) {
+        const testTranslation = req.t('propertyType.Apartment');
+        logger.debug(`[Category Controller] Test translation: ${testTranslation}`);
+      }
+    }
+    
+    const translatedCategories = req.t ? translateCategories(stats, req.t) : stats;
+    
     res.status(200).json({
       success: true,
+      message: req.t ? req.t('category.fetch_success') : 'Categories retrieved successfully',
       data: {
-        categories: stats,
+        categories: translatedCategories,
         total: totalCount,
         timestamp: new Date().toISOString()
       }
@@ -142,6 +157,7 @@ const getCategoryDetails = async (req, res, next) => {
     
     res.status(200).json({
       success: true,
+      message: req.t ? req.t('category.fetch_one_success') : 'Category details retrieved successfully',
       data: {
         propertyType,
         count,
