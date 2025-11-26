@@ -7,6 +7,10 @@ const userSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    username_ar: {
+      type: String,
+      default: '',
+    },
     email: {
       type: String,
       required: true,
@@ -31,11 +35,23 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    description_ar: {
+      type: String,
+      default: '',
+    },
     company: {
       type: String,
       default: '',
     },
+    company_ar: {
+      type: String,
+      default: '',
+    },
     position: {
+      type: String,
+      default: '',
+    },
+    position_ar: {
       type: String,
       default: '',
     },
@@ -47,7 +63,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    officeAddress_ar: {
+      type: String,
+      default: '',
+    },
     job: {
+      type: String,
+      default: '',
+    },
+    job_ar: {
       type: String,
       default: '',
     },
@@ -56,6 +80,10 @@ const userSchema = new mongoose.Schema(
       default: '',
     },
     location: {
+      type: String,
+      default: '',
+    },
+    location_ar: {
       type: String,
       default: '',
     },

@@ -13,6 +13,7 @@ const Message = require('../models/message.model');
 const Newsletter = require('../models/newsletter.model');
 const Point = require('../models/point.model');
 const PointTransaction = require('../models/pointTransaction.model');
+const PropertyRental = require('../models/propertyRental.model');
 const Review = require('../models/review.model');
 const User = require('../models/user.model');
 

@@ -173,6 +173,7 @@ const createListing = async (req, res, next) => {
       propertyType: String(propertyType),
       propertyKeyword: String(propertyKeyword),
       propertyDesc: String(propertyDesc),
+      description_ar: req.body.description_ar ? String(req.body.description_ar) : undefined,
       propertyPrice: toNumber(propertyPrice),
       currency: currency ? String(currency) : 'USD',
       status: String(status),
@@ -185,12 +186,15 @@ const createListing = async (req, res, next) => {
       garages: toBoolean(garages),
       garageSize: garages && garageSize ? toNumber(garageSize) : 0,
       yearBuilt: yearBuilt ? toNumber(yearBuilt) : new Date().getFullYear(),
+      floor: req.body.floor ? toNumber(req.body.floor) : undefined,
       amenities: toArray(amenities),
       address: String(address),
+      address_ar: req.body.address_ar ? String(req.body.address_ar) : undefined,
       country: String(country),
       city: String(city),
       state: state ? String(state) : undefined, // Keep for backward compatibility
       neighborhood: String(neighborhood),
+      neighborhood_ar: req.body.neighborhood_ar ? String(req.body.neighborhood_ar) : undefined,
       agent: String(agent), // Required legacy field
       agentId: agentId ? (mongoose.Types.ObjectId.isValid(agentId) ? new mongoose.Types.ObjectId(agentId) : null) : null,
       agentEmail: agentEmail ? String(agentEmail) : undefined,
@@ -200,6 +204,7 @@ const createListing = async (req, res, next) => {
       isSold: toBoolean(isSold, false),
       isDeleted: toBoolean(isDeleted, false),
       notes: notes ? String(notes) : undefined,
+      notes_ar: req.body.notes_ar ? String(req.body.notes_ar) : undefined,
       images: Array.isArray(images) ? images : [],
       imageNames: toArray(imageNames)
     };

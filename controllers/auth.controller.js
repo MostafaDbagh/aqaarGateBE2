@@ -423,6 +423,9 @@ const resetPassword = async (req, res, next) => {
       });
     }
 
+    // Normalize email (lowercase, trim)
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Validate password length
     if (newPassword.length < 6) {
       return res.status(400).json({
@@ -589,20 +592,44 @@ const getAgentById = async (req, res, next) => {
     // Transform the data to match the expected format
     const transformedAgent = {
       _id: agent._id,
+      username: agent.username,
+      username_ar: agent.username_ar || '',
       fullName: agent.username,
       email: agent.email,
       avatar: agent.avatar,
-      description: agent.description,
+      description: agent.description || '',
+      description_ar: agent.description_ar || '',
+      company: agent.company || '',
+      company_ar: agent.company_ar || '',
       companyName: agent.company,
-      position: agent.position,
-      officeNumber: agent.officeNumber,
-      officeAddress: agent.officeAddress,
-      job: agent.job,
-      phone: agent.phone,
-      location: agent.location,
-      facebook: agent.facebook,
-      twitter: agent.twitter,
-      linkedin: agent.linkedin,
+      position: agent.position || '',
+      position_ar: agent.position_ar || '',
+      officeNumber: agent.officeNumber || '',
+      officeAddress: agent.officeAddress || '',
+      officeAddress_ar: agent.officeAddress_ar || '',
+      job: agent.job || '',
+      job_ar: agent.job_ar || '',
+      phone: agent.phone || '',
+      location: agent.location || '',
+      location_ar: agent.location_ar || '',
+      city: agent.city || '',
+      facebook: agent.facebook || '',
+      twitter: agent.twitter || '',
+      linkedin: agent.linkedin || '',
+      whatsapp: agent.whatsapp || '',
+      servicesAndExpertise: agent.servicesAndExpertise || [],
+      responseTime: agent.responseTime || '',
+      availability: agent.availability || '',
+      yearsExperience: agent.yearsExperience || 0,
+      pointsBalance: agent.pointsBalance || 0,
+      packageType: agent.packageType || 'basic',
+      packageExpiry: agent.packageExpiry || null,
+      isTrial: agent.isTrial || false,
+      hasUnlimitedPoints: agent.hasUnlimitedPoints || false,
+      isBlocked: agent.isBlocked || false,
+      blockedReason: agent.blockedReason || '',
+      blockedAt: agent.blockedAt || null,
+      role: agent.role,
       createdAt: agent.createdAt,
       updatedAt: agent.updatedAt
     };

@@ -23,14 +23,22 @@ const updateUser = async (req, res, next) => {
     if (req.body.posterImage) updateData.posterImage = req.body.posterImage;
     
     // Profile fields
+    if (req.body.username !== undefined) updateData.username = req.body.username;
+    if (req.body.username_ar !== undefined) updateData.username_ar = req.body.username_ar;
     if (req.body.description !== undefined) updateData.description = req.body.description;
+    if (req.body.description_ar !== undefined) updateData.description_ar = req.body.description_ar;
     if (req.body.company !== undefined) updateData.company = req.body.company;
+    if (req.body.company_ar !== undefined) updateData.company_ar = req.body.company_ar;
     if (req.body.position !== undefined) updateData.position = req.body.position;
+    if (req.body.position_ar !== undefined) updateData.position_ar = req.body.position_ar;
     if (req.body.officeNumber !== undefined) updateData.officeNumber = req.body.officeNumber;
     if (req.body.officeAddress !== undefined) updateData.officeAddress = req.body.officeAddress;
+    if (req.body.officeAddress_ar !== undefined) updateData.officeAddress_ar = req.body.officeAddress_ar;
     if (req.body.job !== undefined) updateData.job = req.body.job;
+    if (req.body.job_ar !== undefined) updateData.job_ar = req.body.job_ar;
     if (req.body.phone !== undefined) updateData.phone = req.body.phone;
     if (req.body.location !== undefined) updateData.location = req.body.location;
+    if (req.body.location_ar !== undefined) updateData.location_ar = req.body.location_ar;
     if (req.body.city !== undefined) updateData.city = req.body.city;
     
     // Social media fields

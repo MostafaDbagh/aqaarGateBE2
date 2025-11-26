@@ -6,6 +6,7 @@ const listingSchema = new mongoose.Schema(
     propertyKeyword: { type: String, required: true },
     propertyDesc: { type: String, required: true },
     description: { type: String }, // Alternative field name
+    description_ar: { type: String }, // Arabic description
     propertyPrice: { type: Number, required: true },
     currency: { 
       type: String, 
@@ -31,13 +32,16 @@ const listingSchema = new mongoose.Schema(
     garages: { type: Boolean, required: true },
     garageSize: { type: Number },
     yearBuilt: { type: Number },
+    floor: { type: Number }, // Floor number
     amenities: [{ type: String }],  
 //////property location//////////
     address: { type: String, required: true },
+    address_ar: { type: String }, // Arabic full address
     country: { type: String,required:true  },
     city: { type: String,required:true  },
     state: { type: String }, // Keep for backward compatibility
     neighborhood: { type: String,required:true },
+    neighborhood_ar: { type: String }, // Arabic neighborhood
 
     agent: { type: String, required: true }, // Legacy field - keep for backward compatibility
     agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: false }, // New field for proper reference
@@ -58,6 +62,7 @@ const listingSchema = new mongoose.Schema(
     offer: { type: Boolean, required: false },
     visitCount: { type: Number, default: 0 },
     notes: { type: String, required: false }, // Additional notes about the property
+    notes_ar: { type: String, required: false }, // Arabic notes
 
     ////media -part
     imageNames: { 
