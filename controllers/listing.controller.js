@@ -18,10 +18,12 @@ const logger = require('../utils/logger');
 
 /**
  * Helper function to convert string to number
+ * IMPORTANT: For propertyPrice, we preserve exact value without any rounding
  */
 const toNumber = (value, defaultValue = 0) => {
   if (value === null || value === undefined || value === '') return defaultValue;
-  const num = Number(value);
+  // For exact price preservation, use parseFloat instead of Number to avoid any precision issues
+  const num = parseFloat(value);
   return isNaN(num) ? defaultValue : num;
 };
 
@@ -168,13 +170,34 @@ const createListing = async (req, res, next) => {
     const city = state || req.body.city || 'Unknown';
 
     // Build listing data object with proper type conversions
+    // IMPORTANT: Preserve exact propertyPrice value as entered by agent
+    // Log the original value from request body
+    logger.info(`💰 Property Price - Raw from req.body: ${JSON.stringify(propertyPrice)}, Type: ${typeof propertyPrice}`);
+    
+    // Convert to number - use parseFloat to preserve exact decimal values if any
+    let exactPrice;
+    if (typeof propertyPrice === 'string') {
+      exactPrice = parseFloat(propertyPrice);
+    } else if (typeof propertyPrice === 'number') {
+      exactPrice = propertyPrice;
+    } else {
+      exactPrice = toNumber(propertyPrice);
+    }
+    
+    // Ensure it's a valid number
+    if (isNaN(exactPrice)) {
+      return next(errorHandler(400, 'Invalid property price value'));
+    }
+    
+    logger.info(`💰 Property Price - After conversion: ${exactPrice}, Type: ${typeof exactPrice}, String representation: ${exactPrice.toString()}`);
+    
     const listingData = {
       propertyId: propertyId || `PROP_${Date.now()}`,
       propertyType: String(propertyType),
       propertyKeyword: String(propertyKeyword),
       propertyDesc: String(propertyDesc),
       description_ar: req.body.description_ar ? String(req.body.description_ar) : undefined,
-      propertyPrice: toNumber(propertyPrice),
+      propertyPrice: exactPrice, // Use exact price without any modification
       currency: currency ? String(currency) : 'USD',
       status: String(status),
       rentType: status === 'rent' ? (rentType || 'monthly') : undefined,
@@ -215,7 +238,8 @@ const createListing = async (req, res, next) => {
       listingData.furnished = true; // Force furnished true
     }
 
-    // Log the prepared data
+    // Log the prepared data with special attention to propertyPrice
+    logger.info(`💰 Final propertyPrice before save: ${listingData.propertyPrice}, Type: ${typeof listingData.propertyPrice}, String: ${listingData.propertyPrice.toString()}`);
     logger.debug('Listing data prepared:', {
       propertyId: listingData.propertyId,
       propertyType: listingData.propertyType,
@@ -223,12 +247,15 @@ const createListing = async (req, res, next) => {
       city: listingData.city,
       agentId: listingData.agentId,
       imagesCount: listingData.images.length,
-      amenitiesCount: listingData.amenities.length
+      amenitiesCount: listingData.amenities.length,
+      propertyPrice: listingData.propertyPrice
     });
 
     // Create listing in database
     const newListing = await Listing.create(listingData);
     
+    // Log the saved price to verify it matches what we sent
+    logger.info(`💰 Property Price - Saved in DB: ${newListing.propertyPrice}, Type: ${typeof newListing.propertyPrice}, String: ${newListing.propertyPrice.toString()}`);
     logger.info(`✅ Listing created successfully: ${newListing._id}`);
 
     // Store listing ID for point deduction middleware
@@ -388,13 +415,68 @@ const updateListing = async (req, res, next) => {
       req.body.soldDate = null;
     }
 
+    // Ensure propertyPrice is preserved exactly as sent (no rounding or modification)
+    const updateData = { ...req.body };
+    if (updateData.propertyPrice !== undefined) {
+      // Preserve exact price value - convert to number but don't round
+      const originalPrice = updateData.propertyPrice;
+      const exactPrice = parseFloat(updateData.propertyPrice);
+      if (isNaN(exactPrice)) {
+        return next(errorHandler(400, 'Invalid property price'));
+      }
+      logger.info(`💰 Update Property Price - Original: ${originalPrice}, Converted: ${exactPrice}, Type: ${typeof exactPrice}`);
+      updateData.propertyPrice = exactPrice;
+    }
+
+    // IMPORTANT: Preserve approvalStatus - only allow changes by admin
+    // Log current approvalStatus before update
+    logger.info(`📋 Update Listing - Current approvalStatus: ${listing.approvalStatus}, User role: ${req.user.role}`);
+    logger.info(`📋 Update Listing - Request body approvalStatus: ${req.body.approvalStatus}, Type: ${typeof req.body.approvalStatus}`);
+    
+    // If user is not admin, ALWAYS preserve the existing approvalStatus
+    if (req.user.role !== 'admin') {
+      // Non-admin users cannot change approvalStatus - ALWAYS preserve existing value
+      // Remove approvalStatus from updateData completely to ensure it's not changed
+      if (updateData.approvalStatus !== undefined) {
+        logger.warn(`⚠️ Non-admin user attempted to change approvalStatus from ${listing.approvalStatus} to ${updateData.approvalStatus}. Preserving original: ${listing.approvalStatus}`);
+      }
+      // ALWAYS remove approvalStatus from updateData for non-admin users
+      delete updateData.approvalStatus;
+      // Explicitly set it to the existing value to ensure it's preserved
+      updateData.approvalStatus = listing.approvalStatus;
+    } else {
+      // Admin can change approvalStatus - but log it
+      if (updateData.approvalStatus !== undefined && updateData.approvalStatus !== listing.approvalStatus) {
+        logger.info(`✅ Admin changed approvalStatus from ${listing.approvalStatus} to ${updateData.approvalStatus}`);
+      } else if (updateData.approvalStatus === undefined) {
+        // If admin didn't send approvalStatus, preserve existing
+        updateData.approvalStatus = listing.approvalStatus;
+      }
+    }
+
+    // Final check: If approvalStatus is being changed to 'rejected' by non-admin, prevent it
+    if (req.user.role !== 'admin' && updateData.approvalStatus && updateData.approvalStatus.toLowerCase() === 'rejected') {
+      logger.error(`🚨 CRITICAL: Non-admin user attempted to set approvalStatus to 'rejected'. Forcing to original: ${listing.approvalStatus}`);
+      updateData.approvalStatus = listing.approvalStatus; // Force to original value
+    }
+    
+    // Normalize approvalStatus to lowercase before saving (model also has lowercase: true, but this ensures consistency)
+    if (updateData.approvalStatus) {
+      updateData.approvalStatus = updateData.approvalStatus.toLowerCase().trim();
+    }
+    
+    logger.info(`📋 Update Listing - Final approvalStatus to save: ${updateData.approvalStatus}`);
+
     const updatedListing = await Listing.findByIdAndUpdate(
       req.params.id,
       {
-        $set: req.body,
+        $set: updateData,
       },
       { new: true }
     );
+    
+    // Log the saved approvalStatus to verify it matches what we intended
+    logger.info(`📋 Update Listing - Saved approvalStatus in DB: ${updatedListing.approvalStatus}, Original was: ${listing.approvalStatus}`);
 
     res.status(200).json(updatedListing);
   } catch (error) {
@@ -484,7 +566,7 @@ const getListingsByAgent = async (req, res, next) => {
     // For public pages (home, listing page, agent listing page), show only approved and exclude sold
     // For agent dashboard, show all statuses (pending, approved, rejected) including sold
     if (isPublic === 'true' || isPublic === true) {
-      query.approvalStatus = 'approved';
+      query.approvalStatus = { $in: ['approved', 'Approved', 'APPROVED'] }; // Match any case variation
       query.isSold = { $ne: true }; // Exclude sold listings from public pages
     }
     
@@ -509,6 +591,14 @@ const getListingsByAgent = async (req, res, next) => {
         .lean(),
       Listing.countDocuments(query)
     ]);
+    
+    // Log approvalStatus for debugging
+    if (listings.length > 0) {
+      logger.info(`📋 getListingsByAgent - Found ${listings.length} listings for agent ${agentId}`);
+      listings.forEach((listing, index) => {
+        logger.info(`📋 getListingsByAgent - Listing ${index + 1}: ID=${listing._id}, approvalStatus=${listing.approvalStatus}, propertyId=${listing.propertyId}`);
+      });
+    }
     
     // Translate listings if translation function is available
     const { translateListings } = require('../utils/translateData');
@@ -548,18 +638,45 @@ const getFilteredListings = async (req, res, next) => {
     
     // For public search, show approved listings only
     // No listing will be published without admin approval
+    // Use exact match first (most common case - lowercase due to model validation)
     filters.approvalStatus = 'approved';
     
-    logger.debug('getFilteredListings - filters:', filters);
+    logger.debug('getFilteredListings - filters:', JSON.stringify(filters, null, 2));
     logger.debug('getFilteredListings - sortOptions:', sortOptions);
     logger.debug('getFilteredListings - limit:', limit, 'skip:', skip);
     
     // Query the database with filters
-    const listings = await Listing.find(filters)
+    let listings = await Listing.find(filters)
       .sort(sortOptions)
       .limit(limit)
       .skip(skip)
       .lean(); // Use lean() for better performance
+    
+    // If no results with exact match, try case-insensitive regex (for backward compatibility)
+    if (listings.length === 0) {
+      logger.warn(`⚠️ getFilteredListings - No listings found with exact 'approved' match, trying case-insensitive...`);
+      const filtersWithRegex = { ...filters };
+      filtersWithRegex.approvalStatus = { $regex: /^approved$/i };
+      
+      listings = await Listing.find(filtersWithRegex)
+        .sort(sortOptions)
+        .limit(limit)
+        .skip(skip)
+        .lean();
+    }
+    
+    // Log approvalStatus values for debugging
+    if (listings.length > 0) {
+      logger.info(`📋 getFilteredListings - Found ${listings.length} listings`);
+      listings.slice(0, 3).forEach((listing, index) => {
+        logger.info(`📋 getFilteredListings - Listing ${index + 1}: propertyId=${listing.propertyId}, approvalStatus=${listing.approvalStatus}, type=${typeof listing.approvalStatus}, isSold=${listing.isSold}, isDeleted=${listing.isDeleted}`);
+      });
+    } else {
+      logger.warn(`⚠️ getFilteredListings - No listings found with filters:`, JSON.stringify(filters, null, 2));
+      // Debug: Check what listings exist in database
+      const allListings = await Listing.find({ isDeleted: { $ne: true } }).select('propertyId approvalStatus isSold isDeleted').limit(5).lean();
+      logger.warn(`⚠️ getFilteredListings - Sample listings in DB:`, JSON.stringify(allListings, null, 2));
+    }
     
     // Check if agents are blocked and add blocked flag to listings
     const agentIds = [...new Set(listings.map(l => l.agentId || l.agent).filter(Boolean))];
@@ -617,7 +734,7 @@ const getEachStateListing = async (req, res, next) => {
         $match: {
           isDeleted: { $ne: true },
           isSold: { $ne: true }, // Exclude sold listings
-          approvalStatus: 'approved' // Only count approved listings
+          approvalStatus: { $in: ['approved', 'Approved', 'APPROVED'] } // Match any case variation
         }
       },
       {
@@ -665,6 +782,7 @@ const getMostVisitedListings = async (req, res, next) => {
     const agentIdObj = isObjectId ? new mongoose.Types.ObjectId(agentId) : agentId;
     
     // Match both agentId (new) and agent (legacy) fields, exclude deleted and sold listings
+    // Match both lowercase and any case variations (should be lowercase due to model validation)
     const listings = await Listing.find({
       $or: [
         { agentId: agentIdObj },
@@ -672,11 +790,21 @@ const getMostVisitedListings = async (req, res, next) => {
       ],
       isDeleted: { $ne: true },
       isSold: { $ne: true }, // Exclude sold listings from most visited
-      approvalStatus: 'approved' // Only show approved listings
+      approvalStatus: { $in: ['approved', 'Approved', 'APPROVED'] }
     })
       .sort({ visitCount: -1 })
       .limit(10)
       .lean();
+    
+    // Log approvalStatus values for debugging
+    if (listings.length > 0) {
+      logger.info(`📋 getMostVisitedListings - Found ${listings.length} listings for agent ${agentId}`);
+      listings.slice(0, 3).forEach((listing, index) => {
+        logger.info(`📋 getMostVisitedListings - Listing ${index + 1}: propertyId=${listing.propertyId}, approvalStatus=${listing.approvalStatus}, type=${typeof listing.approvalStatus}`);
+      });
+    } else {
+      logger.warn(`⚠️ getMostVisitedListings - No listings found for agent ${agentId}`);
+    }
     
     logger.debug('getMostVisitedListings - found listings:', listings.length);
     logger.debug('getMostVisitedListings - sample listing:', listings[0] ? {

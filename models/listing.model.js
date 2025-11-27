@@ -51,7 +51,9 @@ const listingSchema = new mongoose.Schema(
     approvalStatus: { 
       type: String, 
       enum: ['pending', 'approved', 'rejected', 'closed'], 
-      default: 'pending' 
+      default: 'pending',
+      lowercase: true, // Always store in lowercase
+      trim: true
     },
     isSold: { type: Boolean, default: false },
     soldCharges: { type: Number, default: 0 }, // Charges/fees for sold listing record

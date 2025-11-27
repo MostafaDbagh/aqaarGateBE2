@@ -9,7 +9,8 @@ const getCityStats = async (req, res, next) => {
   try {
     // Use aggregation to get counts for each city
     // This is much faster than fetching all listings and counting manually
-    const cityStats = await Listing.aggregate([
+    // Try exact match first
+    let cityStats = await Listing.aggregate([
       // Match only non-deleted, approved, and not sold listings
       {
         $match: {
@@ -39,12 +40,50 @@ const getCityStats = async (req, res, next) => {
       }
     ]);
     
+    // If no results with exact match, try case-insensitive regex
+    if (cityStats.length === 0) {
+      cityStats = await Listing.aggregate([
+        {
+          $match: {
+            isDeleted: { $ne: true },
+            isSold: { $ne: true },
+            approvalStatus: { $regex: /^approved$/i }
+          }
+        },
+        {
+          $group: {
+            _id: '$city',
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { count: -1 }
+        },
+        {
+          $project: {
+            _id: 0,
+            city: '$_id',
+            count: 1
+          }
+        }
+      ]);
+    }
+    
     // Also get total count (only approved, non-deleted, and not sold)
-    const totalCount = await Listing.countDocuments({
+    // Try exact match first, fallback to case-insensitive regex
+    let totalCount = await Listing.countDocuments({
       isDeleted: { $ne: true },
       isSold: { $ne: true },
       approvalStatus: 'approved'
     });
+    
+    if (totalCount === 0) {
+      totalCount = await Listing.countDocuments({
+        isDeleted: { $ne: true },
+        isSold: { $ne: true },
+        approvalStatus: { $regex: /^approved$/i }
+      });
+    }
     
     // Map city names to images
     const cityImageMap = {
@@ -104,7 +143,8 @@ const getCityDetails = async (req, res, next) => {
     }
     
     // Get count for specific city (case-insensitive) - only approved, not sold
-    const count = await Listing.countDocuments({
+    // Try exact match first, fallback to case-insensitive regex
+    let count = await Listing.countDocuments({
       $or: [
         { city: { $regex: new RegExp(`^${cityName}$`, 'i') } },
         { state: { $regex: new RegExp(`^${cityName}$`, 'i') } } // Fallback to state for backward compatibility
@@ -113,6 +153,18 @@ const getCityDetails = async (req, res, next) => {
       isSold: { $ne: true },
       approvalStatus: 'approved'
     });
+    
+    if (count === 0) {
+      count = await Listing.countDocuments({
+        $or: [
+          { city: { $regex: new RegExp(`^${cityName}$`, 'i') } },
+          { state: { $regex: new RegExp(`^${cityName}$`, 'i') } }
+        ],
+        isDeleted: { $ne: true },
+        isSold: { $ne: true },
+        approvalStatus: { $regex: /^approved$/i }
+      });
+    }
     
     // Get average price for this city
     const avgPriceResult = await Listing.aggregate([
@@ -180,20 +232,39 @@ const getCityDetails = async (req, res, next) => {
 const getAllCities = async (req, res, next) => {
   try {
     // Get distinct cities from database (only approved, not sold)
-    const cities = await Listing.distinct('city', {
+    // Try exact match first, fallback to case-insensitive regex
+    let cities = await Listing.distinct('city', {
       isDeleted: { $ne: true },
       isSold: { $ne: true },
       approvalStatus: 'approved',
       city: { $exists: true, $ne: null, $ne: '' }
     });
     
+    if (cities.length === 0) {
+      cities = await Listing.distinct('city', {
+        isDeleted: { $ne: true },
+        isSold: { $ne: true },
+        approvalStatus: { $regex: /^approved$/i },
+        city: { $exists: true, $ne: null, $ne: '' }
+      });
+    }
+    
     // Also get distinct states for backward compatibility (only approved, not sold)
-    const states = await Listing.distinct('state', {
+    let states = await Listing.distinct('state', {
       isDeleted: { $ne: true },
       isSold: { $ne: true },
       approvalStatus: 'approved',
       state: { $exists: true, $ne: null, $ne: '' }
     });
+    
+    if (states.length === 0) {
+      states = await Listing.distinct('state', {
+        isDeleted: { $ne: true },
+        isSold: { $ne: true },
+        approvalStatus: { $regex: /^approved$/i },
+        state: { $exists: true, $ne: null, $ne: '' }
+      });
+    }
     
     // Combine and remove duplicates
     const allLocations = [...new Set([...cities, ...states])].sort();

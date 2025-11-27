@@ -101,15 +101,24 @@ const updatePropertyApproval = async (req, res, next) => {
       }
     }
 
-    property.approvalStatus = approvalStatus;
+    const oldApprovalStatus = property.approvalStatus;
+    // Normalize approvalStatus to lowercase before saving
+    property.approvalStatus = approvalStatus.toLowerCase().trim();
     if (notes) property.notes = notes;
     
     await property.save();
-
+    
+    // Reload from database to verify the change
+    const savedProperty = await Listing.findById(id);
+    
     logger.info('[ADMIN_PROPERTY_APPROVAL]', {
       propertyId: id,
-      approvalStatus,
-      adminId: req.user.id
+      propertyKeyword: property.propertyKeyword,
+      oldApprovalStatus,
+      newApprovalStatus: approvalStatus,
+      savedApprovalStatus: savedProperty?.approvalStatus,
+      adminId: req.user.id,
+      agentId: property.agentId?.toString()
     });
 
     res.status(200).json({
