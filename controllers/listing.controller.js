@@ -290,14 +290,20 @@ const createListing = async (req, res, next) => {
 
 const deleteListing = async (req, res, next) => {
   try {
+    logger.info(`Delete listing request - ID: ${req.params.id}, User: ${req.user?.id || 'unknown'}`);
+    logger.debug('Request body:', req.body);
+    logger.debug('Request headers:', req.headers);
+
     const listing = await Listing.findById(req.params.id);
 
     if (!listing) {
+      logger.warn(`Listing not found: ${req.params.id}`);
       return next(errorHandler(404, 'Listing not found!'));
     }
 
     // Check if user is authenticated
     if (!req.user) {
+      logger.warn('Delete attempt without authentication');
       return next(errorHandler(401, 'You must be logged in to delete listings!'));
     }
 
@@ -307,11 +313,25 @@ const deleteListing = async (req, res, next) => {
 
     // Check if user is the owner or admin
     if (userId !== listingAgentId && req.user.role !== 'admin') {
+      logger.warn(`Unauthorized delete attempt - User: ${userId}, Listing Owner: ${listingAgentId}`);
       return next(errorHandler(403, 'You can only delete your own listings!'));
     }
 
     // Get deletion reason from request body
     const { deletedReason } = req.body;
+    logger.info(`Deletion reason: ${deletedReason || 'No reason provided'}`);
+
+    // Normalize status to match enum values (sale or rent)
+    // Handle cases where status might be "For Sale", "For Rent", etc.
+    if (listing.status) {
+      const statusLower = listing.status.toLowerCase().trim();
+      if (statusLower.includes('rent')) {
+        listing.status = 'rent';
+      } else if (statusLower.includes('sale')) {
+        listing.status = 'sale';
+      }
+      // If it's already 'sale' or 'rent', keep it as is
+    }
 
     // Soft delete: mark as deleted instead of actually deleting
     listing.isDeleted = true;
@@ -350,12 +370,15 @@ const deleteListing = async (req, res, next) => {
       logger.info(`Deleted ${deleteMessagesResult.deletedCount} messages for deleted listing ${listing._id}`);
     }
 
+    logger.info(`Listing ${listing._id} deleted successfully by user ${userId}`);
     res.status(200).json({
       success: true,
       message: 'Listing has been deleted!',
       data: listing
     });
   } catch (error) {
+    logger.error('Error in deleteListing controller:', error);
+    logger.error('Error stack:', error.stack);
     next(error);
   }
 };
@@ -463,6 +486,30 @@ const updateListing = async (req, res, next) => {
     // Normalize approvalStatus to lowercase before saving (model also has lowercase: true, but this ensures consistency)
     if (updateData.approvalStatus) {
       updateData.approvalStatus = updateData.approvalStatus.toLowerCase().trim();
+    }
+    
+    // Normalize status to match enum values (sale or rent)
+    // Handle cases where status might be "For Sale", "For Rent", etc. (from old data or frontend)
+    if (updateData.status) {
+      const statusLower = updateData.status.toLowerCase().trim();
+      if (statusLower.includes('rent')) {
+        updateData.status = 'rent';
+      } else if (statusLower.includes('sale')) {
+        updateData.status = 'sale';
+      }
+      // If it's already 'sale' or 'rent', keep it as is
+      logger.info(`📋 Update Listing - Status normalized: ${updateData.status}`);
+    }
+    
+    // Also normalize existing listing status if it's in old format (before saving)
+    if (listing.status && !['sale', 'rent'].includes(listing.status)) {
+      const statusLower = listing.status.toLowerCase().trim();
+      if (statusLower.includes('rent')) {
+        listing.status = 'rent';
+      } else if (statusLower.includes('sale')) {
+        listing.status = 'sale';
+      }
+      logger.info(`📋 Update Listing - Existing listing status normalized: ${listing.status}`);
     }
     
     logger.info(`📋 Update Listing - Final approvalStatus to save: ${updateData.approvalStatus}`);
