@@ -170,11 +170,13 @@ const createListing = async (req, res, next) => {
     const city = state || req.body.city || 'Unknown';
 
     // Build listing data object with proper type conversions
-    // IMPORTANT: Preserve exact propertyPrice value as entered by agent
+    // CRITICAL: Preserve exact propertyPrice value as entered by agent
+    // NO DEDUCTION, NO MODIFICATION, NO FEES - Price must be stored exactly as received
     // Log the original value from request body
     logger.info(`💰 Property Price - Raw from req.body: ${JSON.stringify(propertyPrice)}, Type: ${typeof propertyPrice}`);
     
     // Convert to number - use parseFloat to preserve exact decimal values if any
+    // NO DEDUCTION - Price is converted but never modified or reduced
     let exactPrice;
     if (typeof propertyPrice === 'string') {
       exactPrice = parseFloat(propertyPrice);
@@ -189,6 +191,13 @@ const createListing = async (req, res, next) => {
       return next(errorHandler(400, 'Invalid property price value'));
     }
     
+    // CRITICAL: Verify no price modification occurred during conversion
+    // If original was a number, ensure it matches exactly
+    if (typeof propertyPrice === 'number' && propertyPrice !== exactPrice) {
+      logger.error(`💰 CRITICAL: Price modification detected! Original: ${propertyPrice}, Converted: ${exactPrice}`);
+      return next(errorHandler(500, 'Price validation error - price was modified'));
+    }
+    
     logger.info(`💰 Property Price - After conversion: ${exactPrice}, Type: ${typeof exactPrice}, String representation: ${exactPrice.toString()}`);
     
     const listingData = {
@@ -197,7 +206,7 @@ const createListing = async (req, res, next) => {
       propertyKeyword: String(propertyKeyword),
       propertyDesc: String(propertyDesc),
       description_ar: req.body.description_ar ? String(req.body.description_ar) : undefined,
-      propertyPrice: exactPrice, // Use exact price without any modification
+      propertyPrice: exactPrice, // CRITICAL: Store exact price - NO DEDUCTION, NO MODIFICATION, NO FEES
       currency: currency ? String(currency) : 'USD',
       status: String(status),
       rentType: status === 'rent' ? (rentType || 'monthly') : undefined,
@@ -438,17 +447,25 @@ const updateListing = async (req, res, next) => {
       req.body.soldDate = null;
     }
 
-    // Ensure propertyPrice is preserved exactly as sent (no rounding or modification)
+    // CRITICAL: Ensure propertyPrice is preserved exactly as sent (no rounding, no modification, NO DEDUCTION)
     const updateData = { ...req.body };
     if (updateData.propertyPrice !== undefined) {
-      // Preserve exact price value - convert to number but don't round
+      // CRITICAL: Preserve exact price value - convert to number but NEVER deduct or modify
+      // NO DEDUCTION, NO FEES, NO MODIFICATION - Price must be stored exactly as received
       const originalPrice = updateData.propertyPrice;
       const exactPrice = parseFloat(updateData.propertyPrice);
       if (isNaN(exactPrice)) {
         return next(errorHandler(400, 'Invalid property price'));
       }
+      
+      // Verify no price modification occurred
+      if (typeof originalPrice === 'number' && originalPrice !== exactPrice) {
+        logger.error(`💰 CRITICAL: Price modification detected during update! Original: ${originalPrice}, Converted: ${exactPrice}`);
+        return next(errorHandler(500, 'Price validation error - price was modified'));
+      }
+      
       logger.info(`💰 Update Property Price - Original: ${originalPrice}, Converted: ${exactPrice}, Type: ${typeof exactPrice}`);
-      updateData.propertyPrice = exactPrice;
+      updateData.propertyPrice = exactPrice; // CRITICAL: Store exact price - NO DEDUCTION, NO MODIFICATION
     }
 
     // IMPORTANT: Preserve approvalStatus - only allow changes by admin
