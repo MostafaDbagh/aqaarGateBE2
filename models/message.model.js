@@ -95,6 +95,9 @@ messageSchema.index({ propertyId: 1 });
 messageSchema.index({ status: 1 });
 messageSchema.index({ senderEmail: 1 });
 messageSchema.index({ agentId: 1, status: 1 });
+messageSchema.index({ recipientId: 1, status: 1 }); // For recipient-based queries
+messageSchema.index({ agentId: 1, status: 1, createdAt: -1 }); // Compound index for dashboard
+messageSchema.index({ propertyId: 1, status: 1 }); // For property message queries
 
 // Virtual for message age
 messageSchema.virtual('ageInDays').get(function() {

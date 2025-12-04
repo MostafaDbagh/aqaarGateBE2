@@ -87,7 +87,18 @@ const listingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-
+// Database indexes for query performance optimization
+// Compound indexes for common query patterns
+listingSchema.index({ status: 1, isDeleted: 1 }); // Filter by status and exclude deleted
+listingSchema.index({ propertyType: 1, status: 1 }); // Search by type and status
+listingSchema.index({ city: 1, state: 1 }); // Location-based searches
+listingSchema.index({ agentId: 1 }); // Agent dashboard queries
+listingSchema.index({ approvalStatus: 1 }); // Admin filtering
+listingSchema.index({ createdAt: -1 }); // Sorting by newest
+listingSchema.index({ propertyPrice: 1 }); // Price range queries
+listingSchema.index({ status: 1, propertyType: 1, isDeleted: 1 }); // Common filter combination
+listingSchema.index({ city: 1, status: 1, isDeleted: 1 }); // Location + status filtering
+listingSchema.index({ agentId: 1, isDeleted: 1 }); // Agent's non-deleted listings
 
 const Listing = mongoose.model('Listing', listingSchema);
 

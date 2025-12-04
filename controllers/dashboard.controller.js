@@ -56,34 +56,37 @@ const getDashboardStats = async (req, res) => {
       isDeleted: { $ne: true }
     };
 
+    // Optimized: Combine listing counts into single aggregation
+    const listingCounts = await Listing.aggregate([
+      {
+        $match: listingFilter
+      },
+      {
+        $group: {
+          _id: '$approvalStatus',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Extract counts from aggregation result
+    const countsMap = {};
+    listingCounts.forEach(item => {
+      countsMap[item._id || 'total'] = item.count;
+    });
+    
+    const totalListings = countsMap.total || Object.values(countsMap).reduce((sum, count) => sum + count, 0);
+    const pendingListings = countsMap.pending || 0;
+    const approvedListings = countsMap.approved || 0;
+
     const [
-      totalListings,
-      pendingListings,
-      approvedListings,
       totalFavorites,
       totalReviews,
-      unreadMessages,
-      totalMessages,
+      messageStats,
       pointBalance
     ] = await Promise.all([
-      // Total listings by this user/agent
-      Listing.countDocuments({ 
-        ...listingFilter
-      }),
       
-      // Pending listings
-      Listing.countDocuments({ 
-        ...listingFilter,
-        approvalStatus: 'pending'
-      }),
-      
-      // Approved listings
-      Listing.countDocuments({ 
-        ...listingFilter,
-        approvalStatus: 'approved'
-      }),
-      
-      // Total favorites by this user - only count favorites for non-deleted listings
+      // Optimized: Total favorites - use $lookup with pipeline for better performance
       Favorite.aggregate([
         {
           $match: {
@@ -93,14 +96,24 @@ const getDashboardStats = async (req, res) => {
         {
           $lookup: {
             from: 'listings',
-            localField: 'propertyId',
-            foreignField: '_id',
+            let: { propId: '$propertyId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$_id', '$$propId'] },
+                  isDeleted: { $ne: true }
+                }
+              },
+              {
+                $limit: 1
+              }
+            ],
             as: 'property'
           }
         },
         {
           $match: {
-            'property.isDeleted': { $ne: true }
+            'property.0': { $exists: true } // Only favorites with valid (non-deleted) listings
           }
         },
         {
@@ -108,55 +121,31 @@ const getDashboardStats = async (req, res) => {
         }
       ]).then(result => result[0]?.total || 0),
       
-      // Total reviews for this user's listings - only count reviews for non-deleted listings
+      // Optimized: Total reviews - propertyId is already ObjectId, no conversion needed
+      // Use $lookup with pipeline for better performance
       Review.aggregate([
         {
-          $addFields: {
-            propertyObjectId: { $toObjectId: '$propertyId' }
-          }
-        },
-        {
           $lookup: {
             from: 'listings',
-            localField: 'propertyObjectId',
-            foreignField: '_id',
-            as: 'property'
-          }
-        },
-        {
-          $match: {
-            'property.agentId': new mongoose.Types.ObjectId(queryId),
-            'property.isDeleted': { $ne: true }
-          }
-        },
-        {
-          $count: 'total'
-        }
-      ]).then(result => result[0]?.total || 0),
-      
-      // Unread messages for this agent - only count messages for non-deleted listings
-      Message.aggregate([
-        {
-          $match: {
-            $or: [
-              { recipientId: userIdObj },
-              { agentId: userIdObj },
-              { agentId: queryIdObj }
+            let: { propId: '$propertyId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$_id', '$$propId'] },
+                  agentId: queryIdObj,
+                  isDeleted: { $ne: true }
+                }
+              },
+              {
+                $limit: 1
+              }
             ],
-            status: 'unread'
-          }
-        },
-        {
-          $lookup: {
-            from: 'listings',
-            localField: 'propertyId',
-            foreignField: '_id',
             as: 'property'
           }
         },
         {
           $match: {
-            'property.isDeleted': { $ne: true }
+            'property.0': { $exists: true } // Only reviews for valid listings
           }
         },
         {
@@ -164,7 +153,7 @@ const getDashboardStats = async (req, res) => {
         }
       ]).then(result => result[0]?.total || 0),
       
-      // Total messages for this agent - only count messages for non-deleted listings
+      // Optimized: Combine unread and total message counts in single aggregation
       Message.aggregate([
         {
           $match: {
@@ -178,24 +167,49 @@ const getDashboardStats = async (req, res) => {
         {
           $lookup: {
             from: 'listings',
-            localField: 'propertyId',
-            foreignField: '_id',
+            let: { propId: '$propertyId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$_id', '$$propId'] },
+                  isDeleted: { $ne: true }
+                }
+              },
+              {
+                $limit: 1
+              }
+            ],
             as: 'property'
           }
         },
         {
           $match: {
-            'property.isDeleted': { $ne: true }
+            'property.0': { $exists: true } // Only messages for valid listings
           }
         },
         {
-          $count: 'total'
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            unread: {
+              $sum: {
+                $cond: [{ $eq: ['$status', 'unread'] }, 1, 0]
+              }
+            }
+          }
         }
-      ]).then(result => result[0]?.total || 0),
+      ]).then(result => {
+        const stats = result[0] || { total: 0, unread: 0 };
+        return { total: stats.total, unread: stats.unread };
+      }),
       
-      // Point balance
-      Point.findOne({ userId: userIdObj }).select('balance')
+      // Point balance - use lean() for read-only query
+      Point.findOne({ userId: userIdObj }).select('balance').lean()
     ]);
+
+    // Extract message stats
+    const unreadMessages = messageStats?.unread || 0;
+    const totalMessages = messageStats?.total || 0;
 
     // Calculate additional metrics
     const listingLimit = user.isAgent ? 50 : 10; // Agents get 50, regular users get 10
@@ -205,6 +219,7 @@ const getDashboardStats = async (req, res) => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     
+    // Optimized: Recent activity counts (countDocuments is already optimized)
     const recentActivity = await Promise.all([
       Listing.countDocuments({
         ...listingFilter,
@@ -216,32 +231,37 @@ const getDashboardStats = async (req, res) => {
       }),
       Message.countDocuments({
         $or: [
-          { agentId: userId },
-          { agentId: queryId }
+          { agentId: userIdObj },
+          { agentId: queryIdObj }
         ],
         createdAt: { $gte: sevenDaysAgo }
       })
     ]);
 
-    // Calculate average rating for agent's properties - only count reviews for non-deleted listings
+    // Optimized: Calculate average rating - use $lookup with pipeline, no $toObjectId needed
     const reviewsForAgent = await Review.aggregate([
-      {
-        $addFields: {
-          propertyObjectId: { $toObjectId: '$propertyId' }
-        }
-      },
       {
         $lookup: {
           from: 'listings',
-          localField: 'propertyObjectId',
-          foreignField: '_id',
+          let: { propId: '$propertyId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$_id', '$$propId'] },
+                agentId: queryIdObj,
+                isDeleted: { $ne: true }
+              }
+            },
+            {
+              $limit: 1
+            }
+          ],
           as: 'property'
         }
       },
       {
         $match: {
-          'property.agentId': new mongoose.Types.ObjectId(queryId),
-          'property.isDeleted': { $ne: true }
+          'property.0': { $exists: true } // Only reviews for valid listings
         }
       },
       {
@@ -453,26 +473,35 @@ const getDashboardAnalytics = async (req, res) => {
         { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
       ]),
 
-      // Reviews over time - only count reviews for non-deleted listings
+      // Optimized: Reviews over time - use $lookup with pipeline, no $toObjectId needed
       Review.aggregate([
         {
-          $addFields: {
-            propertyObjectId: { $toObjectId: '$propertyId' }
+          $match: {
+            createdAt: { $gte: startDate }
           }
         },
         {
           $lookup: {
             from: 'listings',
-            localField: 'propertyObjectId',
-            foreignField: '_id',
+            let: { propId: '$propertyId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$_id', '$$propId'] },
+                  agentId: queryIdObj,
+                  isDeleted: { $ne: true }
+                }
+              },
+              {
+                $limit: 1
+              }
+            ],
             as: 'property'
           }
         },
         {
           $match: {
-            'property.agentId': new mongoose.Types.ObjectId(queryId),
-            'property.isDeleted': { $ne: true },
-            createdAt: { $gte: startDate }
+            'property.0': { $exists: true } // Only reviews for valid listings
           }
         },
         {
@@ -489,7 +518,7 @@ const getDashboardAnalytics = async (req, res) => {
         { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
       ]),
 
-      // Top performing listings (by visits)
+      // Optimized: Top performing listings - use lean() for read-only query
       Listing.find({
         $or: [
           { agent: queryId },
@@ -499,7 +528,8 @@ const getDashboardAnalytics = async (req, res) => {
       })
       .select('propertyTitle propertyPrice visitCount createdAt')
       .sort({ visitCount: -1 })
-      .limit(5),
+      .limit(5)
+      .lean(),
 
       // Monthly statistics
       Listing.aggregate([
@@ -632,17 +662,17 @@ const getDashboardNotifications = async (req, res) => {
       expiringListings,
       newReviews
     ] = await Promise.all([
-      // Unread messages - check both recipientId and agentId
+      // Optimized: Unread messages - use lean() for read-only query
       Message.find({
         $or: [
           { recipientId: userIdObj },
           { agentId: userIdObj },
           { agentId: queryIdObj }
         ],
-        isRead: false
-      }).select('senderId subject createdAt').limit(5),
+        status: 'unread' // Use status field instead of isRead
+      }).select('senderName senderEmail subject createdAt').limit(5).lean(),
 
-      // Pending listings
+      // Optimized: Pending listings - use lean() for read-only query
       Listing.find({
         $or: [
           { agent: queryId },
@@ -650,12 +680,12 @@ const getDashboardNotifications = async (req, res) => {
         ],
         approvalStatus: 'pending',
         isDeleted: { $ne: true }
-      }).select('propertyTitle createdAt').limit(5),
+      }).select('propertyTitle createdAt').limit(5).lean(),
 
       // Low balance check
       Point.findOne({ userId: userIdObj }).select('balance'),
 
-      // Expiring listings (older than 90 days)
+      // Optimized: Expiring listings - use lean() for read-only query
       Listing.find({
         $or: [
           { agent: queryId },
@@ -663,27 +693,32 @@ const getDashboardNotifications = async (req, res) => {
         ],
         createdAt: { $lte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
         isDeleted: { $ne: true }
-      }).select('propertyTitle createdAt').limit(5),
+      }).select('propertyTitle createdAt').limit(5).lean(),
 
-      // Recent reviews - only get reviews for non-deleted listings
+      // Optimized: Recent reviews - use $lookup with pipeline, no $toObjectId needed
       Review.aggregate([
-        {
-          $addFields: {
-            propertyObjectId: { $toObjectId: '$propertyId' }
-          }
-        },
         {
           $lookup: {
             from: 'listings',
-            localField: 'propertyObjectId',
-            foreignField: '_id',
+            let: { propId: '$propertyId' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$_id', '$$propId'] },
+                  agentId: queryIdObj,
+                  isDeleted: { $ne: true }
+                }
+              },
+              {
+                $limit: 1
+              }
+            ],
             as: 'property'
           }
         },
         {
           $match: {
-            'property.agentId': new mongoose.Types.ObjectId(queryId),
-            'property.isDeleted': { $ne: true }
+            'property.0': { $exists: true } // Only reviews for valid listings
           }
         },
         {

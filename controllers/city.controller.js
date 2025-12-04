@@ -90,7 +90,7 @@ const getCityStats = async (req, res, next) => {
       'Aleppo': '/images/cities/aleppo.jpg',
       'Damascus': '/images/cities/damascus.jpg',
       'Daraa': '/images/cities/daraa.webp',
-      'Der El Zor': '/images/cities/deralzor.jpg',
+      'Deir ez-Zur': '/images/cities/Deir ez-Zur.jpg',
       'Hama': '/images/cities/hama.jpg',
       'Homs': '/images/cities/Homs.jpg',
       'Idlib': '/images/cities/idlib.jpg',

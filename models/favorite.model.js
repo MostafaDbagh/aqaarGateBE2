@@ -10,6 +10,8 @@ const favoriteSchema = new mongoose.Schema(
 );
 
 favoriteSchema.index({ userId: 1, propertyId: 1 }, { unique: true });
+favoriteSchema.index({ userId: 1, createdAt: -1 }); // For recent activity queries
+favoriteSchema.index({ propertyId: 1 }); // For listing-based queries
 
 const Favorite = mongoose.model('Favorite', favoriteSchema);
 

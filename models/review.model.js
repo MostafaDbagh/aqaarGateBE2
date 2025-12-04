@@ -54,8 +54,12 @@ const reviewSchema = new mongoose.Schema(
     },
   },
   { timestamps: true }
-
 );
+
+// Additional indexes for dashboard queries
+reviewSchema.index({ propertyId: 1, createdAt: -1 }); // For property reviews with date sorting
+reviewSchema.index({ agentId: 1, createdAt: -1 }); // For agent dashboard reviews
+reviewSchema.index({ rating: 1 }); // For rating-based queries
 
 const Review = mongoose.model('Review', reviewSchema);
 
