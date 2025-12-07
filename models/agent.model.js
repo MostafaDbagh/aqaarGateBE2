@@ -14,7 +14,7 @@ const agentSchema = new mongoose.Schema(
     phone: { type: String, required: true },
     location: { type: String, required: true },
     facebook: { type: String },
-    twitter: { type: String },
+    instagram: { type: String },
     linkedin: { type: String },
     avatar: { type: String }, // ✅ add this
     poster: { type: String },

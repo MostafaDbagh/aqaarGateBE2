@@ -614,7 +614,7 @@ const getAgentById = async (req, res, next) => {
       location_ar: agent.location_ar || '',
       city: agent.city || '',
       facebook: agent.facebook || '',
-      twitter: agent.twitter || '',
+      instagram: agent.instagram || '',
       linkedin: agent.linkedin || '',
       whatsapp: agent.whatsapp || '',
       servicesAndExpertise: agent.servicesAndExpertise || [],

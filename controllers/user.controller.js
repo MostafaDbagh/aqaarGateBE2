@@ -43,7 +43,7 @@ const updateUser = async (req, res, next) => {
     
     // Social media fields
     if (req.body.facebook !== undefined) updateData.facebook = req.body.facebook;
-    if (req.body.twitter !== undefined) updateData.twitter = req.body.twitter;
+    if (req.body.instagram !== undefined) updateData.instagram = req.body.instagram;
     if (req.body.linkedin !== undefined) updateData.linkedin = req.body.linkedin;
     
     // Services & Expertise - handle array
