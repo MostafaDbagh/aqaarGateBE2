@@ -889,6 +889,238 @@ const getMostVisitedListings = async (req, res, next) => {
   }
 };
 
+/**
+ * AI-powered natural language property search
+ * POST /api/listing/ai-search
+ * Body: { query: "I want one apartment 2 room 1 bedroom with nice view" }
+ * 
+ * Uses rule-based parser (works in Syria) with optional OpenAI fallback
+ */
+const aiSearch = async (req, res, next) => {
+  try {
+    const { translateListings } = require('../utils/translateData');
+    const { parseQuery } = require('../utils/ruleBasedParser');
+    
+    const { query } = req.body;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 12;
+    const skip = (page - 1) * limit;
+
+    // Validate query
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      return next(errorHandler(400, 'Query is required and must be a non-empty string'));
+    }
+
+    logger.info(`🔍 Natural Language Search request: "${query}"`);
+
+    // Parse natural language query using rule-based parser (works in Syria!)
+    let extractedParams;
+    try {
+      // Use rule-based parser (no external API needed - works in Syria)
+      extractedParams = parseQuery(query);
+      
+      // Optional: Try OpenAI if available (for better accuracy)
+      // Uncomment below if you have OpenAI API key and want to use it
+      /*
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          const { parseAIQuery } = require('../utils/aiSearchParser');
+          const aiParams = await parseAIQuery(query);
+          // Merge AI results with rule-based (AI takes precedence)
+          extractedParams = { ...extractedParams, ...aiParams };
+          logger.info('✅ Using OpenAI for enhanced parsing');
+        } catch (aiError) {
+          logger.warn('OpenAI parsing failed, using rule-based only:', aiError.message);
+          // Continue with rule-based parser
+        }
+      }
+      */
+    } catch (parseError) {
+      logger.error('Query parsing error:', parseError);
+      return next(errorHandler(500, `Query parsing failed: ${parseError.message}`));
+    }
+
+    // Build MongoDB query filters from extracted parameters
+    const filters = {
+      isDeleted: { $ne: true },
+      isSold: { $ne: true },
+      approvalStatus: 'approved'
+    };
+
+    // Apply property type filter
+    if (extractedParams.propertyType) {
+      filters.propertyType = extractedParams.propertyType;
+    }
+
+    // Apply numeric filters
+    if (extractedParams.bedrooms !== null) {
+      filters.bedrooms = extractedParams.bedrooms;
+    }
+
+    if (extractedParams.bathrooms !== null) {
+      filters.bathrooms = extractedParams.bathrooms;
+    }
+
+    // Apply size range filter
+    if (extractedParams.sizeMin || extractedParams.sizeMax) {
+      filters.size = {};
+      if (extractedParams.sizeMin !== null) {
+        filters.size.$gte = extractedParams.sizeMin;
+      }
+      if (extractedParams.sizeMax !== null) {
+        filters.size.$lte = extractedParams.sizeMax;
+      }
+    }
+
+    // Apply price range filter
+    if (extractedParams.priceMin || extractedParams.priceMax) {
+      filters.propertyPrice = {};
+      if (extractedParams.priceMin !== null) {
+        filters.propertyPrice.$gte = extractedParams.priceMin;
+      }
+      if (extractedParams.priceMax !== null) {
+        filters.propertyPrice.$lte = extractedParams.priceMax;
+      }
+    }
+
+    // Apply status filter
+    if (extractedParams.status) {
+      filters.status = extractedParams.status;
+    }
+
+    // Apply city filter
+    if (extractedParams.city) {
+      filters.city = extractedParams.city;
+    }
+
+    // Apply neighborhood filter (case-insensitive regex)
+    if (extractedParams.neighborhood) {
+      filters.neighborhood = { $regex: extractedParams.neighborhood, $options: 'i' };
+    }
+
+    // Apply amenities filter
+    if (extractedParams.amenities && extractedParams.amenities.length > 0) {
+      filters.amenities = { $in: extractedParams.amenities };
+    }
+
+    // Apply boolean filters
+    if (extractedParams.furnished !== null) {
+      filters.furnished = extractedParams.furnished;
+    }
+
+    if (extractedParams.garages !== null) {
+      filters.garages = extractedParams.garages;
+    }
+
+    // Build keyword search (for view types and other descriptive keywords)
+    const keywordConditions = [];
+    
+    // Add view type keywords
+    if (extractedParams.viewType) {
+      const viewKeywords = extractedParams.viewType.split(' ');
+      viewKeywords.forEach(keyword => {
+        keywordConditions.push(
+          { propertyKeyword: { $regex: keyword, $options: 'i' } },
+          { propertyDesc: { $regex: keyword, $options: 'i' } },
+          { description_ar: { $regex: keyword, $options: 'i' } }
+        );
+      });
+    }
+
+    // Add other keywords
+    if (extractedParams.keywords && extractedParams.keywords.length > 0) {
+      extractedParams.keywords.forEach(keyword => {
+        keywordConditions.push(
+          { propertyKeyword: { $regex: keyword, $options: 'i' } },
+          { propertyDesc: { $regex: keyword, $options: 'i' } },
+          { description_ar: { $regex: keyword, $options: 'i' } }
+        );
+      });
+    }
+
+    // If we have keyword conditions, add $or to filters
+    if (keywordConditions.length > 0) {
+      // If filters already has $or, merge them
+      if (filters.$or) {
+        filters.$and = [
+          { $or: filters.$or },
+          { $or: keywordConditions }
+        ];
+        delete filters.$or;
+      } else {
+        filters.$or = keywordConditions;
+      }
+    }
+
+    logger.debug('AI Search filters:', JSON.stringify(filters, null, 2));
+
+    // Query the database
+    let listings = await Listing.find(filters)
+      .sort({ createdAt: -1 }) // Sort by newest first
+      .limit(limit)
+      .skip(skip)
+      .lean();
+
+    // If no results with exact match, try case-insensitive regex for approvalStatus
+    if (listings.length === 0) {
+      logger.warn('⚠️ AI Search - No listings found with exact match, trying case-insensitive...');
+      const filtersWithRegex = { ...filters };
+      filtersWithRegex.approvalStatus = { $regex: /^approved$/i };
+      
+      listings = await Listing.find(filtersWithRegex)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip(skip)
+        .lean();
+    }
+
+    // Check if agents are blocked and add blocked flag to listings
+    const agentIds = [...new Set(listings.map(l => l.agentId || l.agent).filter(Boolean))];
+    if (agentIds.length > 0) {
+      const blockedAgents = await User.find({
+        _id: { $in: agentIds },
+        isBlocked: true
+      }).select('_id').lean();
+      
+      const blockedAgentIds = new Set(blockedAgents.map(a => a._id.toString()));
+      
+      listings.forEach(listing => {
+        const agentId = listing.agentId?.toString() || listing.agent?.toString();
+        if (agentId && blockedAgentIds.has(agentId)) {
+          listing.isAgentBlocked = true;
+        }
+      });
+    }
+
+    // Get total count for pagination
+    const totalCount = await Listing.countDocuments(filters);
+    const totalPages = Math.ceil(totalCount / limit);
+
+    // Translate listings if translation function is available
+    const translatedListings = req.t ? translateListings(listings, req.t) : listings;
+
+    logger.info(`✅ Natural Language Search found ${listings.length} listings (page ${page} of ${totalPages})`);
+
+    // Return response with extracted parameters for transparency
+    res.status(200).json({
+      success: true,
+      data: translatedListings,
+      extractedParams: extractedParams,
+      pagination: {
+        page: page,
+        limit: limit,
+        total: totalCount,
+        totalPages: totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
+  } catch (error) {
+    logger.error('AI Search error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   createListing,
   deleteListing,
@@ -900,4 +1132,5 @@ module.exports = {
   getEachStateListing,
   incrementVisitCount,
   getMostVisitedListings,
+  aiSearch,
 };
