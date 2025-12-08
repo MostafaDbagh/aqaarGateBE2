@@ -14,6 +14,9 @@ const {
 // But we need to ensure it's available before other middleware
 
 router.get('/search', filterListings, ListingController.getFilteredListings);
+// AI-powered natural language search endpoint - Available for all users (no authentication required)
+// All roles can use this: user, agent, admin, and anonymous users
+router.post('/ai-search', ListingController.aiSearch);
 // Multer parses both files and form fields automatically
 // Middleware order: verifyToken -> multer (parses files + fields) -> error handler -> upload to Cloudinary -> check points -> create listing
 router.post('/create', verifyToken, uploadListingImages, handleMulterError, uploadListingImagesMiddleware, checkAndDeductPoints, ListingController.createListing, deductPointsAfterListing);
