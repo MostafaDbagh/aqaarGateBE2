@@ -28,18 +28,76 @@ const AMENITIES = [
 ];
 
 // Syrian provinces/cities (English and Arabic)
+// Includes all spelling variations and dialect differences to avoid search errors
+// Covers different dialects, missing hamza, and common misspellings
 const SYRIAN_CITIES = [
-  { en: 'Aleppo', ar: ['حلب', 'حلبي'] },
-  { en: 'As-Suwayda', ar: ['السويداء', 'سويداء'] },
-  { en: 'Damascus', ar: ['دمشق', 'دمشقي'] },
-  { en: 'Daraa', ar: ['درعا', 'درعاوي'] },
-  { en: 'Deir ez-Zur', ar: ['دير الزور', 'ديري'] },
-  { en: 'Hama', ar: ['حماة', 'حمص'] },
-  { en: 'Homs', ar: ['حمص', 'حمصي'] },
-  { en: 'Idlib', ar: ['إدلب', 'إدلبي'] },
-  { en: 'Latakia', ar: ['اللاذقية', 'لاذقاني'] },
-  { en: 'Raqqah', ar: ['الرقة', 'رقي'] },
-  { en: 'Tartus', ar: ['طرطوس', 'طرطوسي'] }
+  { 
+    en: 'Aleppo', 
+    ar: [
+      'حلب', 'حلبي', 'حلبية', 'حلبا', 'حلب', 'حلبي'
+    ] 
+  },
+  { 
+    en: 'As-Suwayda', 
+    ar: [
+      'السويداء', 'السويدا', 'سويداء', 'سويدا', 'سويدا', 'سويداء'
+    ] 
+  },
+  { 
+    en: 'Damascus', 
+    ar: [
+      'دمشق', 'دمشئ', 'شام', 'دمشقي', 'الشام', 'دمشق', 'شام'
+    ] 
+  },
+  { 
+    en: 'Daraa', 
+    ar: [
+      'درعا', 'درعا', 'درعاوي', 'درعا', 'درعا'
+    ] 
+  },
+  { 
+    en: 'Deir ez-Zur', 
+    ar: [
+      'دير الزور', 'ديرالزور', 'الدير', 'ديري', 'دير الزور', 'ديرالزور', 'الدير'
+    ] 
+  },
+  { 
+    en: 'Hama', 
+    ar: [
+      'حماة', 'حما', 'حماة', 'حما', 'حماة', 'حما'
+    ] 
+  },
+  { 
+    en: 'Homs', 
+    ar: [
+      'حمص', 'حمصي', 'حمص', 'حمص', 'حمصي'
+    ] 
+  },
+  { 
+    en: 'Idlib', 
+    ar: [
+      'إدلب', 'ادلب', 'ادليب', 'إدلبي', 'ادلب', 'إدلب', 'ادلب', 'ادليب'
+    ] 
+  },
+  { 
+    en: 'Latakia', 
+    ar: [
+      'اللاذقية', 'اللادئية', 'اللادقية', 'لاذقية', 'لادقية', 'لادئية', 'لاذقاني',
+      'اللاذقية', 'اللادئية', 'اللادقية', 'لاذقية', 'لادقية', 'لادئية'
+    ] 
+  },
+  { 
+    en: 'Raqqah', 
+    ar: [
+      'الرقة', 'رقة', 'رقي', 'الرقة', 'رقة', 'رقي'
+    ] 
+  },
+  { 
+    en: 'Tartus', 
+    ar: [
+      'طرطوس', 'طرطوسي', 'طرطوس', 'طرطوسي', 'طرطوس'
+    ] 
+  }
 ];
 
 /**
@@ -139,6 +197,9 @@ const parseQuery = (query) => {
     }
 
     // Extract bedrooms from Arabic (غرفتين = 2 rooms, غرفة = 1 room, etc.)
+    // CRITICAL: If "صالون" (salon/living room) is mentioned, add 1 room to the count
+    const hasSalon = query.includes('صالون') || query.includes('صالة') || query.includes('صاله');
+    
     if (extractedParams.bedrooms === null) {
       const arabicBedroomPatterns = [
         /(?:غرفتين|غرفتان|غرفتين|غرفتين)/, // 2 rooms
@@ -153,29 +214,49 @@ const parseQuery = (query) => {
       for (const pattern of arabicBedroomPatterns) {
         const match = query.match(pattern);
         if (match) {
+          let bedroomCount = null;
+          
           if (query.includes('غرفتين') || query.includes('غرفتان')) {
-            extractedParams.bedrooms = 2;
-            break;
-          } else if (query.includes('غرفة') && !query.includes('غرفتين') && !query.includes('ثلاث')) {
-            extractedParams.bedrooms = 1;
-            break;
+            bedroomCount = 2;
+          } else if (query.includes('غرفة') && !query.includes('غرفتين') && !query.includes('ثلاث') && !query.includes('أربع') && !query.includes('خمس')) {
+            bedroomCount = 1;
           } else if (query.includes('ثلاث غرف') || query.includes('ثلاثة غرف')) {
-            extractedParams.bedrooms = 3;
-            break;
+            bedroomCount = 3;
           } else if (query.includes('أربع غرف') || query.includes('أربعة غرف')) {
-            extractedParams.bedrooms = 4;
-            break;
+            bedroomCount = 4;
           } else if (query.includes('خمس غرف') || query.includes('خمسة غرف')) {
-            extractedParams.bedrooms = 5;
-            break;
+            bedroomCount = 5;
           } else if (match[1]) {
             const num = parseInt(match[1]);
             if (!isNaN(num) && num > 0) {
-              extractedParams.bedrooms = num;
-              break;
+              bedroomCount = num;
             }
           }
+          
+          // If salon is mentioned, add 1 room to the count
+          if (bedroomCount !== null) {
+            if (hasSalon) {
+              extractedParams.bedrooms = bedroomCount + 1;
+              logger.info(`✅ Found ${bedroomCount} rooms + salon = ${bedroomCount + 1} total rooms`);
+            } else {
+              extractedParams.bedrooms = bedroomCount;
+            }
+            break;
+          }
         }
+      }
+      
+      // Special case: if only "صالون" is mentioned without specific room count
+      // Assume it's "غرفة وصالون" = 2 rooms
+      if (extractedParams.bedrooms === null && hasSalon && !query.match(/\d+\s*(?:غرفة|غرف)/) && !query.includes('غرفتين') && !query.includes('ثلاث') && !query.includes('أربع')) {
+        extractedParams.bedrooms = 2; // غرفة واحدة + صالون = 2
+        logger.info('✅ Found salon only, assuming 1 room + salon = 2 total rooms');
+      }
+    } else {
+      // If bedrooms were already extracted from English patterns, add salon if mentioned
+      if (hasSalon && extractedParams.bedrooms !== null) {
+        extractedParams.bedrooms = extractedParams.bedrooms + 1;
+        logger.info(`✅ Adding salon to existing room count: ${extractedParams.bedrooms - 1} + 1 = ${extractedParams.bedrooms}`);
       }
     }
 
@@ -198,19 +279,27 @@ const parseQuery = (query) => {
     }
 
     // Extract city/location
-    for (const city of SYRIAN_CITIES) {
-      const cityLower = city.en.toLowerCase();
-      // Check English name
-      if (normalizedQuery.includes(cityLower)) {
-        extractedParams.city = city.en;
-        break;
-      }
-      // Check Arabic names
-      for (const arName of city.ar) {
-        if (query.includes(arName)) {
+    // CRITICAL: Check for "شام" first as it's a common alternative for Damascus
+    if (query.includes('شام') || query.includes('الشام')) {
+      extractedParams.city = 'Damascus';
+      logger.info('✅ Found "شام" or "الشام", mapping to Damascus');
+    } else {
+      // Check other cities
+      for (const city of SYRIAN_CITIES) {
+        const cityLower = city.en.toLowerCase();
+        // Check English name
+        if (normalizedQuery.includes(cityLower)) {
           extractedParams.city = city.en;
           break;
         }
+        // Check Arabic names
+        for (const arName of city.ar) {
+          if (query.includes(arName)) {
+            extractedParams.city = city.en;
+            break;
+          }
+        }
+        if (extractedParams.city) break; // Exit loop if city found
       }
     }
 
@@ -383,9 +472,27 @@ const parseQuery = (query) => {
     if (query.includes('بناء جديد') || query.includes('بناء جديد')) {
       extractedParams.keywords.push('new building', 'بناء جديد');
     }
-    if (query.includes('صالون') || query.includes('صالة')) {
+    if (query.includes('صالون') || query.includes('صالة') || query.includes('صاله')) {
       extractedParams.keywords.push('salon', 'living room', 'صالون');
     }
+    
+    // CRITICAL: "منتفعات" or "منافع" means bathrooms exist (not kitchen - kitchen is implicit)
+    // If mentioned, assume bathrooms exist and add to keywords
+    if (query.includes('منتفعات') || query.includes('منافع') || query.includes('منفعة')) {
+      extractedParams.keywords.push('bathrooms', 'حمامات', 'منتفعات');
+      // "منتفعات" means bathrooms exist - ensure bathrooms are set (if not already specified)
+      if (extractedParams.bathrooms === null) {
+        // Assume at least 1 bathroom if "منتفعات" is mentioned (منتفعات = bathrooms only)
+        extractedParams.bathrooms = 1;
+        logger.info('✅ Found "منتفعات", assuming bathrooms exist (at least 1 bathroom)');
+      }
+    }
+    
+    // Also check for direct mention of kitchen (separate from منتفعات)
+    if (query.includes('مطبخ') || query.includes('مطابخ')) {
+      extractedParams.keywords.push('kitchen', 'مطبخ');
+    }
+    
     if (query.includes('جديد') || query.includes('حديث')) {
       extractedParams.keywords.push('new', 'جديد');
     }
