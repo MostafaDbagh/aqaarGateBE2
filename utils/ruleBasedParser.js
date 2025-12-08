@@ -205,10 +205,10 @@ const parseQuery = (query) => {
         /(?:غرفتين|غرفتان|غرفتين|غرفتين)/, // 2 rooms
         /(?:غرفة|غرفة واحدة)/, // 1 room
         /(?:ثلاث غرف|ثلاثة غرف)/, // 3 rooms
-        /(?:أربع غرف|أربعة غرف)/, // 4 rooms
+        /(?:أ?ر?ب?ع? غرف|أ?ر?ب?ع?ة غرف)/, // 4 rooms (flexible with hamza variations)
         /(?:خمس غرف|خمسة غرف)/, // 5 rooms
-        /(\d+)\s*(?:غرفة|غرف)/, // Number + room(s)
-        /(?:غرف|غرفة)\s*(\d+)/ // room(s) + number
+        /([٠-٩\d]+)\s*(?:غرفة|غرف)/, // Number (Arabic or Latin) + room(s)
+        /(?:غرف|غرفة)\s*([٠-٩\d]+)/ // room(s) + number (Arabic or Latin)
       ];
 
       for (const pattern of arabicBedroomPatterns) {
@@ -216,21 +216,22 @@ const parseQuery = (query) => {
         if (match) {
           let bedroomCount = null;
           
-          if (query.includes('غرفتين') || query.includes('غرفتان')) {
+          // Check for numeric patterns first (Arabic or Latin) - highest priority
+          if (match[1] && /[٠-٩\d]/.test(match[1])) {
+            const num = extractNumber(match[1]);
+            if (num !== null && num > 0) {
+              bedroomCount = num;
+            }
+          } else if (query.includes('غرفتين') || query.includes('غرفتان')) {
             bedroomCount = 2;
-          } else if (query.includes('غرفة') && !query.includes('غرفتين') && !query.includes('ثلاث') && !query.includes('أربع') && !query.includes('خمس')) {
+          } else if (query.includes('غرفة') && !query.includes('غرفتين') && !query.includes('ثلاث') && !query.includes('أربع') && !query.includes('اربع') && !query.includes('خمس') && !query.match(/[٠-٩\d]+\s*غرف/)) {
             bedroomCount = 1;
           } else if (query.includes('ثلاث غرف') || query.includes('ثلاثة غرف')) {
             bedroomCount = 3;
-          } else if (query.includes('أربع غرف') || query.includes('أربعة غرف')) {
+          } else if (query.includes('أربع غرف') || query.includes('أربعة غرف') || query.includes('اربع غرف') || query.includes('اربع غرف') || query.match(/اربع\s*ة?\s*غرف/)) {
             bedroomCount = 4;
           } else if (query.includes('خمس غرف') || query.includes('خمسة غرف')) {
             bedroomCount = 5;
-          } else if (match[1]) {
-            const num = parseInt(match[1]);
-            if (!isNaN(num) && num > 0) {
-              bedroomCount = num;
-            }
           }
           
           // If salon is mentioned, add 1 room to the count
@@ -278,6 +279,60 @@ const parseQuery = (query) => {
       }
     }
 
+    // Extract bathrooms from Arabic (حمام واحد = 1, حمامين = 2, ثلاث حمامات = 3, etc.)
+    if (extractedParams.bathrooms === null) {
+      const arabicBathroomPatterns = [
+        /(?:حمامين|حمامان)/, // 2 bathrooms (check this first to avoid matching "حمام" in "حمامين")
+        /(?:ثلاث حمامات|ثلاثة حمامات)/, // 3 bathrooms
+        /(?:أ?ر?ب?ع? حمامات|أ?ر?ب?ع?ة حمامات|اربع حمامات|اربع حمامات)/, // 4 bathrooms (flexible with hamza variations)
+        /(?:خمس حمامات|خمسة حمامات)/, // 5 bathrooms
+        /(?:حمام واحد|حمام واحد)/, // 1 bathroom (explicit)
+        /([٠-٩\d]+)\s*(?:حمام|حمامات)/, // Number (Arabic or Latin) + bathroom(s)
+        /(?:حمام|حمامات)\s*([٠-٩\d]+)/, // bathroom(s) + number (Arabic or Latin)
+        /(?:حمام|حمامات)(?!\w)/ // Just "حمام" or "حمامات" alone (1 bathroom by default)
+      ];
+
+      for (const pattern of arabicBathroomPatterns) {
+        const match = query.match(pattern);
+        if (match) {
+          let bathroomCount = null;
+          
+          // Check for 2 bathrooms first (to avoid matching "حمام" in "حمامين")
+          if (query.includes('حمامين') || query.includes('حمامان')) {
+            bathroomCount = 2;
+          } else if (query.includes('ثلاث حمامات') || query.includes('ثلاثة حمامات')) {
+            bathroomCount = 3;
+          } else if (query.includes('أربع حمامات') || query.includes('أربعة حمامات') || query.includes('اربع حمامات') || query.includes('اربع حمامات')) {
+            bathroomCount = 4;
+          } else if (query.includes('خمس حمامات') || query.includes('خمسة حمامات')) {
+            bathroomCount = 5;
+          } else if (query.includes('حمام واحد')) {
+            bathroomCount = 1;
+          } else if (match[1]) {
+            // Number + bathroom(s) or bathroom(s) + number (supports Arabic numerals)
+            const num = extractNumber(match[1]);
+            if (num !== null && num > 0) {
+              bathroomCount = num;
+            }
+          } else if (pattern.source.includes('(?!\\w)')) {
+            // Just "حمام" or "حمامات" alone (not part of "حمامين" or other compound words)
+            // Make sure it's not part of "حمامين" or "حمامات" with numbers
+            if (query.includes('حمام') && !query.includes('حمامين') && !query.includes('حمامان') && 
+                !query.includes('ثلاث') && !query.includes('أربع') && !query.includes('اربع') && !query.includes('خمس') &&
+                !query.match(/[٠-٩\d]+\s*حمام/)) {
+              bathroomCount = 1;
+            }
+          }
+          
+          if (bathroomCount !== null) {
+            extractedParams.bathrooms = bathroomCount;
+            logger.info(`✅ Found ${bathroomCount} bathroom(s) from Arabic query`);
+            break;
+          }
+        }
+      }
+    }
+
     // Extract city/location
     // CRITICAL: Check for "شام" first as it's a common alternative for Damascus
     if (query.includes('شام') || query.includes('الشام')) {
@@ -285,6 +340,18 @@ const parseQuery = (query) => {
       logger.info('✅ Found "شام" or "الشام", mapping to Damascus');
     } else {
       // Check other cities
+      // CRITICAL: Avoid false positives - don't match city names that are part of bathroom words
+      const bathroomWords = ['حمام', 'حمامين', 'حمامان', 'حمامات', 'منتفعات', 'منافع'];
+      const isBathroomWord = (text, cityName) => {
+        // Check if the city name appears as part of a bathroom-related word
+        for (const bw of bathroomWords) {
+          if (bw.includes(cityName) && text.includes(bw)) {
+            return true;
+          }
+        }
+        return false;
+      };
+
       for (const city of SYRIAN_CITIES) {
         const cityLower = city.en.toLowerCase();
         // Check English name
@@ -292,10 +359,11 @@ const parseQuery = (query) => {
           extractedParams.city = city.en;
           break;
         }
-        // Check Arabic names
+        // Check Arabic names - but avoid matching if it's part of a bathroom word
         for (const arName of city.ar) {
-          if (query.includes(arName)) {
+          if (query.includes(arName) && !isBathroomWord(query, arName)) {
             extractedParams.city = city.en;
+            logger.info(`✅ Found city "${arName}" (${city.en}), not part of bathroom word`);
             break;
           }
         }
@@ -549,6 +617,30 @@ const parseQuery = (query) => {
     logger.error('Error parsing query:', error);
     throw error;
   }
+};
+
+/**
+ * Convert Arabic-Indic numerals to regular numbers
+ * ٠١٢٣٤٥٦٧٨٩ -> 0123456789
+ */
+const convertArabicNumerals = (str) => {
+  const arabicToLatin = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+  };
+  return str.split('').map(char => arabicToLatin[char] || char).join('');
+};
+
+/**
+ * Extract number from string (handles both Arabic and Latin numerals)
+ */
+const extractNumber = (str) => {
+  if (!str) return null;
+  // Convert Arabic numerals to Latin
+  const converted = convertArabicNumerals(str);
+  // Extract number
+  const match = converted.match(/\d+/);
+  return match ? parseInt(match[0], 10) : null;
 };
 
 /**
