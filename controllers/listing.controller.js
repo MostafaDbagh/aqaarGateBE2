@@ -237,6 +237,7 @@ const createListing = async (req, res, next) => {
       isDeleted: toBoolean(isDeleted, false),
       notes: notes ? String(notes) : undefined,
       notes_ar: req.body.notes_ar ? String(req.body.notes_ar) : undefined,
+      mapLocation: req.body.mapLocation ? String(req.body.mapLocation) : undefined,
       images: Array.isArray(images) ? images : [],
       imageNames: toArray(imageNames)
     };

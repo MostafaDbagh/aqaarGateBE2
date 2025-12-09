@@ -42,6 +42,7 @@ const listingSchema = new mongoose.Schema(
     state: { type: String }, // Keep for backward compatibility
     neighborhood: { type: String,required:true },
     neighborhood_ar: { type: String }, // Arabic neighborhood
+    mapLocation: { type: String, required: false }, // Google Maps location URL or coordinates
 
     agent: { type: String, required: true }, // Legacy field - keep for backward compatibility
     agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: false }, // New field for proper reference
