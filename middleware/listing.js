@@ -1,6 +1,53 @@
 const Listing = require('../models/listing.model');
 const logger = require('../utils/logger');
 
+/**
+ * Convert Arabic property type to English
+ * @param {string} arabicType - Arabic property type value
+ * @returns {string} English property type value
+ */
+const convertArabicPropertyType = (arabicType) => {
+  if (!arabicType || typeof arabicType !== 'string') return arabicType;
+  
+  const propertyTypeMap = {
+    'شقة': 'Apartment',
+    'فيلا/مزرعة': 'Villa/farms',
+    'فيلا': 'Villa',
+    'مكتب': 'Office',
+    'تجاري': 'Commercial',
+    'أرض': 'Land',
+    'أرض/قطعة': 'Land/Plot',
+    'بيت عطلة': 'Holiday Home',
+    'بيوت عطلة': 'Holiday Homes'
+  };
+  
+  return propertyTypeMap[arabicType] || arabicType;
+};
+
+/**
+ * Convert Arabic city name to English
+ * @param {string} arabicCity - Arabic city name
+ * @returns {string} English city name
+ */
+const convertArabicCity = (arabicCity) => {
+  if (!arabicCity || typeof arabicCity !== 'string') return arabicCity;
+  
+  const cityMap = {
+    'دمشق': 'Damascus',
+    'حلب': 'Aleppo',
+    'حمص': 'Homs',
+    'اللاذقية': 'Latakia',
+    'طرطوس': 'Tartus',
+    'درعا': 'Daraa',
+    'حماة': 'Hama',
+    'إدلب': 'Idlib',
+    'دير الزور': 'Der El Zor',
+    'Deir ez-Zor': 'Der El Zor'
+  };
+  
+  return cityMap[arabicCity] || arabicCity;
+};
+
 const filterListings = async (req, res, next) => {
   try {
     const {
@@ -31,19 +78,32 @@ const filterListings = async (req, res, next) => {
 
     // Exact matches
     if (status) filters.status = status;
+    
     // Handle city parameter - main field is 'city', but support legacy 'state' parameter
     // Priority: city > cities > state
+    // Convert Arabic city names to English
+    let cityValue = null;
     if (city) {
-      filters.city = city;
+      cityValue = convertArabicCity(city);
+      filters.city = cityValue;
     } else if (cities) {
-      filters.city = cities;
+      cityValue = convertArabicCity(cities);
+      filters.city = cityValue;
     } else if (state) {
       // Legacy support - map state to city for backward compatibility
-      filters.city = state;
+      cityValue = convertArabicCity(state);
+      filters.city = cityValue;
     }
+    
     if (neighborhood) filters.neighborhood = neighborhood;
     if (rentType) filters.rentType = rentType;
-    if (propertyType) filters.propertyType = propertyType;
+    
+    // Convert Arabic property type to English
+    if (propertyType) {
+      const englishPropertyType = convertArabicPropertyType(propertyType);
+      filters.propertyType = englishPropertyType;
+      logger.debug(`Property type converted: "${propertyType}" -> "${englishPropertyType}"`);
+    }
     if (propertyId) filters.propertyId = propertyId;
     if (agentId) filters.agentId = agentId;
     if (offer !== undefined) filters.offer = offer === 'true';

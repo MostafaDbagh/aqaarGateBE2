@@ -74,14 +74,12 @@ function translateListing(listing, t) {
     }
   }
 
-  // Translate approval status
+  // Don't translate approvalStatus - keep it as-is for filtering
+  // Approval status is an internal field and should not be translated
+  // This ensures filtering works correctly regardless of language
   if (translated.approvalStatus) {
-    const approvalKey = `approvalStatus.${translated.approvalStatus}`;
-    const translatedApproval = t(approvalKey);
-    if (translatedApproval && translatedApproval !== approvalKey) {
-      translated.approvalStatus = translatedApproval;
-      translated.approvalStatusOriginal = listing.approvalStatus; // Keep original for filtering
-    }
+    translated.approvalStatusOriginal = listing.approvalStatus; // Keep original for reference
+    // Keep approvalStatus as-is (don't translate)
   }
 
   return translated;
