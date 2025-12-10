@@ -25,7 +25,6 @@ const defaultAllowedOrigins = [
   'https://aqaargate.com',
   'https://www.aqaargate.com',
   'https://aqaargatebe2.onrender.com',
-  'https://proty-api-mostafa-56627d8ca9aa.herokuapp.com',
 ];
 
 const envAllowedOrigins = [
@@ -70,11 +69,6 @@ const corsOptions = {
       normalizedOrigin.startsWith('http://127.0.0.1:') ||
       normalizedOrigin.startsWith('https://127.0.0.1:')
     ) {
-      return callback(null, true);
-    }
-    
-    // Allow Heroku app URLs (for production)
-    if (normalizedOrigin.includes('.herokuapp.com')) {
       return callback(null, true);
     }
     

@@ -26,7 +26,7 @@ JWT_SECRET=5345jkj5kl34j5kl34j5
 PORT=5500
 ```
 
-### Production (Heroku Config Vars)
+### Production (Environment Variables)
 ```env
 # Set to production to use production database
 NODE_ENV=production
@@ -74,8 +74,8 @@ The database connection code (`api/db/connect.js`) automatically:
    # Local - should show "development"
    cat api/.env | grep NODE_ENV
    
-   # Production - should show "production"
-   heroku config:get NODE_ENV -a proty-api-mostafa
+   # Production - check your production environment variables
+   # Should show "production"
    ```
 
 2. **Verify database connection**:
@@ -100,7 +100,7 @@ The database connection code (`api/db/connect.js`) automatically:
    # Stop and restart your local server
    
    # Restart production
-   heroku restart -a proty-api-mostafa
+   # Restart your production server using your deployment platform's commands
    ```
 
 ## Manual Database Name Override

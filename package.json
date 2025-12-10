@@ -11,7 +11,6 @@
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:i18n": "node test-i18n.js",
-    "heroku-postbuild": "echo 'Backend build complete'",
     "deploy": "npm run start",
     "sync:agents": "node scripts/syncAgents.js",
     "sync:agents:prod-to-local": "node scripts/syncAgents.js --from-production --to-local",
