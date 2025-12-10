@@ -17,7 +17,11 @@
     "sync:agents:prod-to-local": "node scripts/syncAgents.js --from-production --to-local",
     "sync:agents:local-to-prod": "node scripts/syncAgents.js --from-local --to-production",
     "clear:db": "node scripts/clearDatabase.js",
-    "create:admin": "node scripts/create-admin-main.js"
+    "reset:db": "node scripts/resetDatabaseKeepAdmin.js",
+    "check:db": "node scripts/checkDatabaseStatus.js",
+    "verify:db": "node scripts/verifyDatabase.js",
+    "create:admin": "node scripts/create-admin-main.js",
+    "create:admin:dev": "node scripts/create-admin-dev.js"
   },
   "author": "",
   "license": "ISC",

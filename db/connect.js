@@ -1,15 +1,97 @@
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
 
+// Determine environment (default to development for safety)
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const isProduction = NODE_ENV === 'production';
+const isDevelopment = !isProduction;
+
 // Get MongoDB URI from environment variables
 // Support both MONGO_URI and MONGODB_URI for compatibility
-const mongoURI = process.env.MONGO_URI || process.env.MONGODB_URI;
+let mongoURI = process.env.MONGO_URI || process.env.MONGODB_URI;
 
 if (!mongoURI) {
   logger.error('MONGO_URI is not defined in environment variables!');
   logger.error('Please create a .env file in the api/ directory with MONGO_URI set.');
   process.exit(1);
 }
+
+// Automatically set database name based on environment
+// This ensures development and production use different databases
+const getDatabaseName = () => {
+  // If MONGO_DB_NAME is explicitly set, use it
+  if (process.env.MONGO_DB_NAME) {
+    return process.env.MONGO_DB_NAME;
+  }
+  
+  // Extract existing database name from connection string
+  // Pattern: mongodb+srv://user:pass@host/dbname?options
+  let existingDbName = 'SyProperties'; // default
+  const queryIndex = mongoURI.indexOf('?');
+  const uriWithoutQuery = queryIndex !== -1 ? mongoURI.substring(0, queryIndex) : mongoURI;
+  const lastSlashIndex = uriWithoutQuery.lastIndexOf('/');
+  
+  if (lastSlashIndex !== -1 && lastSlashIndex < uriWithoutQuery.length - 1) {
+    existingDbName = uriWithoutQuery.substring(lastSlashIndex + 1);
+  }
+  
+  if (isProduction) {
+    // Production: use database name as-is (remove _Dev if present)
+    return existingDbName.replace(/_Dev$/, '') || 'SyProperties';
+  } else {
+    // Development: append _Dev to database name
+    const baseName = existingDbName.replace(/_Dev$/, '') || 'SyProperties';
+    return `${baseName}_Dev`;
+  }
+};
+
+// Replace database name in connection string
+const replaceDatabaseName = (uri, newDbName) => {
+  // Pattern: mongodb+srv://user:pass@host/dbname?options
+  // or: mongodb://user:pass@host:port/dbname?options
+  
+  // Find the last '/' before the query string (if any)
+  const queryIndex = uri.indexOf('?');
+  const uriWithoutQuery = queryIndex !== -1 ? uri.substring(0, queryIndex) : uri;
+  const queryString = queryIndex !== -1 ? uri.substring(queryIndex) : '';
+  
+  // Find the last '/' which should be before the database name
+  const lastSlashIndex = uriWithoutQuery.lastIndexOf('/');
+  
+  if (lastSlashIndex !== -1) {
+    // Replace everything after the last '/' with the new database name
+    const baseUri = uriWithoutQuery.substring(0, lastSlashIndex + 1);
+    return `${baseUri}${newDbName}${queryString}`;
+  }
+  
+  // If no slash found, append database name
+  return `${uri}/${newDbName}${queryString}`;
+};
+
+const databaseName = getDatabaseName();
+mongoURI = replaceDatabaseName(mongoURI, databaseName);
+
+// Safety check: Warn if trying to use production database in development
+if (isDevelopment && databaseName === 'SyProperties' && !databaseName.includes('_Dev')) {
+  logger.warn('⚠️  WARNING: You are using PRODUCTION database in DEVELOPMENT mode!');
+  logger.warn('⚠️  This is dangerous! Consider using a separate development database.');
+  logger.warn(`⚠️  Current database: ${databaseName}`);
+  logger.warn('⚠️  Set NODE_ENV=development and ensure database name ends with _Dev');
+}
+
+// Log connection info (ALWAYS visible, not just in development)
+console.log('\n═══════════════════════════════════════════════════════');
+console.log('🔌 MongoDB Connection Information');
+console.log('═══════════════════════════════════════════════════════');
+console.log(`📊 Environment: ${NODE_ENV}`);
+console.log(`💾 Database Name: ${databaseName}`);
+if (isDevelopment) {
+  console.log('🛡️  Development mode - using separate database for safety');
+  console.log('✅ Your production database is PROTECTED');
+} else {
+  console.log('⚠️  PRODUCTION mode - using production database');
+}
+console.log('═══════════════════════════════════════════════════════\n');
 
 // Connection options (removed deprecated useNewUrlParser and useUnifiedTopology)
 const connectOptions = {
@@ -25,7 +107,10 @@ const connectOptions = {
 // Connect to MongoDB
 mongoose.connect(mongoURI, connectOptions)
   .then(() => {
-    logger.success('MongoDB connected successfully');
+    console.log(`✅ MongoDB connected successfully to database: ${databaseName}`);
+    if (isDevelopment) {
+      console.log('✅ Your production database is PROTECTED - all changes go to development DB');
+    }
   })
   .catch((err) => {
     logger.error('MongoDB connection error:', err.message);
