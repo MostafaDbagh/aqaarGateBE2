@@ -95,22 +95,28 @@ console.log('══════════════════════�
 
 // Connection options (removed deprecated useNewUrlParser and useUnifiedTopology)
 const connectOptions = {
-  serverSelectionTimeoutMS: 10000, // Increased to 10 seconds for DNS resolution
-  socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-  connectTimeoutMS: 10000, // Timeout for initial connection
+  serverSelectionTimeoutMS: 30000, // Increased to 30 seconds for DNS resolution
+  socketTimeoutMS: 60000, // Close sockets after 60 seconds of inactivity
+  connectTimeoutMS: 30000, // Timeout for initial connection
   maxPoolSize: 10, // Maintain up to 10 socket connections
-  minPoolSize: 5, // Maintain at least 5 socket connections
+  minPoolSize: 1, // Minimum pool size
   retryWrites: true,
-  w: 'majority'
+  w: 'majority',
+  retryReads: true
 };
 
-// Connect to MongoDB
-mongoose.connect(mongoURI, connectOptions)
+// Set mongoose buffer timeout to match connection timeout
+mongoose.set('bufferTimeoutMS', 30000); // 30 seconds buffer timeout
+mongoose.set('bufferCommands', true); // Enable command buffering
+
+// Create connection promise
+const connectionPromise = mongoose.connect(mongoURI, connectOptions)
   .then(() => {
     console.log(`✅ MongoDB connected successfully to database: ${databaseName}`);
     if (isDevelopment) {
       console.log('✅ Your production database is PROTECTED - all changes go to development DB');
     }
+    return mongoose.connection;
   })
   .catch((err) => {
     logger.error('MongoDB connection error:', err.message);
@@ -126,10 +132,21 @@ mongoose.connect(mongoURI, connectOptions)
       logger.error('6. Try using a VPN if DNS resolution is blocked');
     }
     
+    if (err.code === 'ETIMEOUT' || err.message.includes('ETIMEOUT') || err.message.includes('querySrv')) {
+      logger.error('\n🔍 DNS/Network Timeout Error:');
+      logger.error('1. Check your internet connection');
+      logger.error('2. Try restarting your network connection');
+      logger.error('3. Check if MongoDB Atlas cluster is accessible');
+      logger.error('4. Verify DNS resolution is working');
+      logger.error('5. Try using a VPN or different network');
+    }
+    
     if (err.message.includes('authentication')) {
       logger.error('\n🔐 Authentication Error:');
       logger.error('Check your MongoDB username and password');
     }
+    
+    throw err;
   });
 
 const conn = mongoose.connection;
@@ -154,4 +171,6 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+// Export both connection and promise
 module.exports = conn;
+module.exports.ready = connectionPromise;

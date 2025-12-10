@@ -268,6 +268,18 @@ const createListing = async (req, res, next) => {
     logger.info(`💰 Property Price - Saved in DB: ${newListing.propertyPrice}, Type: ${typeof newListing.propertyPrice}, String: ${newListing.propertyPrice.toString()}`);
     logger.info(`✅ Listing created successfully: ${newListing._id}`);
 
+    // Clear category and city cache when new listing is created
+    try {
+      const cache = require('../utils/cache');
+      cache.delete('category_stats_en');
+      cache.delete('category_stats_ar');
+      cache.delete('city_stats_en');
+      cache.delete('city_stats_ar');
+      logger.info('Cache cleared after listing creation');
+    } catch (cacheError) {
+      logger.warn('Failed to clear cache:', cacheError.message);
+    }
+
     // Store listing ID for point deduction middleware
     req.listingId = newListing._id;
     res.locals.listingId = newListing._id;
@@ -348,6 +360,18 @@ const deleteListing = async (req, res, next) => {
     listing.deletedReason = deletedReason || 'No reason provided';
     listing.deletedAt = new Date();
     await listing.save();
+
+    // Clear category and city cache when listing is deleted
+    try {
+      const cache = require('../utils/cache');
+      cache.delete('category_stats_en');
+      cache.delete('category_stats_ar');
+      cache.delete('city_stats_en');
+      cache.delete('city_stats_ar');
+      logger.info('Cache cleared after listing deletion');
+    } catch (cacheError) {
+      logger.warn('Failed to clear cache:', cacheError.message);
+    }
 
     // Delete all favorites associated with this deleted listing
     // This ensures favorites count is accurate and users don't see deleted listings in favorites
@@ -540,6 +564,18 @@ const updateListing = async (req, res, next) => {
       { new: true }
     );
     
+    // Clear category and city cache when listing is updated
+    try {
+      const cache = require('../utils/cache');
+      cache.delete('category_stats_en');
+      cache.delete('category_stats_ar');
+      cache.delete('city_stats_en');
+      cache.delete('city_stats_ar');
+      logger.info('Cache cleared after listing update');
+    } catch (cacheError) {
+      logger.warn('Failed to clear cache:', cacheError.message);
+    }
+    
     // Log the saved approvalStatus to verify it matches what we intended
     logger.info(`📋 Update Listing - Saved approvalStatus in DB: ${updatedListing.approvalStatus}, Original was: ${listing.approvalStatus}`);
 
@@ -688,6 +724,22 @@ const getFilteredListings = async (req, res, next) => {
   try {
     const logger = require('../utils/logger');
     const { translateListings } = require('../utils/translateData');
+    
+    // Wait for MongoDB connection if not ready
+    if (mongoose.connection.readyState !== 1) {
+      // Connection not ready, wait up to 5 seconds
+      let attempts = 0;
+      while (mongoose.connection.readyState !== 1 && attempts < 10) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      if (mongoose.connection.readyState !== 1) {
+        return res.status(503).json({
+          success: false,
+          message: 'Database connection not ready. Please try again in a moment.'
+        });
+      }
+    }
     
     // Get filters and sort options from middleware
     const filters = req.filter || {};

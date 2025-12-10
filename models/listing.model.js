@@ -100,6 +100,11 @@ listingSchema.index({ propertyPrice: 1 }); // Price range queries
 listingSchema.index({ status: 1, propertyType: 1, isDeleted: 1 }); // Common filter combination
 listingSchema.index({ city: 1, status: 1, isDeleted: 1 }); // Location + status filtering
 listingSchema.index({ agentId: 1, isDeleted: 1 }); // Agent's non-deleted listings
+// Optimized index for category stats aggregation query
+listingSchema.index({ isDeleted: 1, isSold: 1, approvalStatus: 1, propertyType: 1 }); // Category stats performance
+// Optimized index for city stats aggregation query
+listingSchema.index({ isDeleted: 1, isSold: 1, approvalStatus: 1, city: 1 }); // City stats performance
+listingSchema.index({ isDeleted: 1, isSold: 1, approvalStatus: 1, state: 1 }); // City stats performance (state fallback)
 
 const Listing = mongoose.model('Listing', listingSchema);
 

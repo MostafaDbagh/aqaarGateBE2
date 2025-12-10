@@ -13,6 +13,7 @@ require('./i18n');
 
 const express = require('express');
 const db = require('./db/connect');
+const mongoose = require('mongoose');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const i18nMiddleware = require('./middleware/i18n');
@@ -249,6 +250,40 @@ const PORT = process.env.PORT || 5500;
 
 const logger = require('./utils/logger');
 
-app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT}`);
-});
+// Wait for MongoDB connection before starting server
+const startServer = async () => {
+  try {
+    logger.info('⏳ Waiting for MongoDB connection...');
+    
+    // Wait for the connection promise to resolve
+    const dbReady = db.ready;
+    if (dbReady) {
+      await dbReady;
+    }
+    
+    // Wait for connection to be ready (readyState === 1)
+    let attempts = 0;
+    while (mongoose.connection.readyState !== 1 && attempts < 60) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      attempts++;
+    }
+    
+    if (mongoose.connection.readyState === 1) {
+      logger.info('✅ MongoDB connection ready');
+      app.listen(PORT, () => {
+        logger.info(`🚀 Server running on port ${PORT}`);
+      });
+    } else {
+      logger.error('❌ Failed to establish MongoDB connection. Server will not start.');
+      logger.error('Please check your MongoDB connection string and network connectivity.');
+      process.exit(1);
+    }
+  } catch (error) {
+    logger.error('❌ Error starting server:', error.message);
+    logger.error('Please check your MongoDB connection string and network connectivity.');
+    process.exit(1);
+  }
+};
+
+// Start the server after ensuring connection
+startServer();

@@ -217,3 +217,4 @@ The rule-based parser is working perfectly! It successfully extracts all search 
 **Ready for production use in Syria!** 🚀
 
 
+

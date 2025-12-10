@@ -1,139 +1,150 @@
 const Listing = require('../models/listing.model');
 const logger = require('../utils/logger');
+const cache = require('../utils/cache');
 
 /**
  * Get category statistics (counts for each property type)
- * This is much more efficient than fetching all listings
+ * OPTIMIZED: Uses single aggregation query + caching for much better performance
  */
 const getCategoryStats = async (req, res, next) => {
   try {
-    // Define all property types with flexible matching
-    const propertyTypes = [
-      { name: 'Apartment', match: ['Apartment', 'apartment'] },
-      { name: 'Villa/farms', match: ['Villa/farms', 'Villa', 'villa', 'Farm', 'farm'] },
-      { name: 'Office', match: ['Office', 'office'] },
-      { name: 'Commercial', match: ['Commercial', 'commercial'] },
-      { name: 'Land', match: ['Land', 'land', 'Land/Plot'] },
-      { name: 'Holiday Home', match: ['Holiday Home', 'Holiday Homes', 'holiday home', 'holiday homes'] }
-    ];
+    const startTime = Date.now();
+    const language = req.language || 'en';
+    const cacheKey = `category_stats_${language}`;
     
-    // Get counts for each property type using flexible matching
-    const stats = await Promise.all(
-      propertyTypes.map(async (typeConfig) => {
-        let count = 0;
-        
-        // Try exact match first (only approved, not sold)
-        count = await Listing.countDocuments({
-          propertyType: { $in: typeConfig.match },
-          isDeleted: { $ne: true },
-          isSold: { $ne: true },
-          approvalStatus: 'approved'
-        });
-        
-        // If no exact match, try case-insensitive regex for approvalStatus
-        if (count === 0) {
-          count = await Listing.countDocuments({
-            propertyType: { $in: typeConfig.match },
-            isDeleted: { $ne: true },
-            isSold: { $ne: true },
-            approvalStatus: { $regex: /^approved$/i }
-          });
-        }
-        
-        // If still no match, try case-insensitive regex for each match pattern (only approved)
-        if (count === 0) {
-          for (const pattern of typeConfig.match) {
-            let regexCount = await Listing.countDocuments({
-              propertyType: { $regex: new RegExp(pattern, 'i') },
-              isDeleted: { $ne: true },
-              isSold: { $ne: true },
-              approvalStatus: 'approved'
-            });
-            
-            if (regexCount === 0) {
-              regexCount = await Listing.countDocuments({
-                propertyType: { $regex: new RegExp(pattern, 'i') },
-                isDeleted: { $ne: true },
-                isSold: { $ne: true },
-                approvalStatus: { $regex: /^approved$/i }
-              });
-            }
-            
-            if (regexCount > 0) {
-              count = regexCount;
-              break;
-            }
-          }
-        }
-        
-        // Special handling for Villa/farms - check if it contains villa or farm (only approved)
-        if (typeConfig.name === 'Villa/farms' && count === 0) {
-          count = await Listing.countDocuments({
-            $or: [
-              { propertyType: { $regex: /villa/i } },
-              { propertyType: { $regex: /farm/i } }
-            ],
-            isDeleted: { $ne: true },
-            isSold: { $ne: true },
-            approvalStatus: 'approved'
-          });
-          
-          if (count === 0) {
-            count = await Listing.countDocuments({
-              $or: [
-                { propertyType: { $regex: /villa/i } },
-                { propertyType: { $regex: /farm/i } }
-              ],
-              isDeleted: { $ne: true },
-              isSold: { $ne: true },
-              approvalStatus: { $regex: /^approved$/i }
-            });
-          }
-        }
-        
-        return {
-          name: typeConfig.name,
-          displayName: typeConfig.name === 'Land' ? 'Land/Plot' : typeConfig.name,
-          count,
-          slug: typeConfig.name.toLowerCase().replace(/\s+/g, '-').replace(/\//g, '-')
-        };
-      })
-    );
-    
-    // Also get total count (only approved, not sold)
-    // Try exact match first, fallback to case-insensitive regex
-    let totalCount = await Listing.countDocuments({
-      isDeleted: { $ne: true },
-      isSold: { $ne: true },
-      approvalStatus: 'approved'
-    });
-    
-    if (totalCount === 0) {
-      totalCount = await Listing.countDocuments({
-        isDeleted: { $ne: true },
-        isSold: { $ne: true },
-        approvalStatus: { $regex: /^approved$/i }
-      });
+    // Check cache first (5 minute TTL)
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      logger.info(`Category stats served from cache (${Date.now() - startTime}ms)`);
+      
+      // Set cache headers for HTTP caching
+      res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
+      res.set('X-Cache', 'HIT');
+      
+      return res.status(200).json(cachedData);
     }
     
-    logger.info(`Category stats fetched: ${stats.length} categories, total: ${totalCount} listings`);
-    logger.debug('Category stats:', stats);
-    
-    // Translate categories if translation function is available
-    const { translateCategories } = require('../utils/translateData');
-    
-    // Debug: Log language and test translation
-    if (req.language) {
-      logger.debug(`[Category Controller] Language: ${req.language}, has req.t: ${!!req.t}`);
-      if (req.t) {
-        const testTranslation = req.t('propertyType.Apartment');
-        logger.debug(`[Category Controller] Test translation: ${testTranslation}`);
+    // Wait for MongoDB connection if not ready
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState !== 1) {
+      // Connection not ready, wait up to 5 seconds
+      let attempts = 0;
+      while (mongoose.connection.readyState !== 1 && attempts < 10) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      if (mongoose.connection.readyState !== 1) {
+        return res.status(503).json({
+          success: false,
+          message: 'Database connection not ready. Please try again in a moment.'
+        });
       }
     }
     
+    // Define property types with normalized matching
+    // Using single aggregation query instead of multiple count queries
+    const propertyTypeMapping = {
+      'Apartment': { patterns: ['apartment'], displayName: 'Apartment' },
+      'Villa/farms': { patterns: ['villa', 'farm', 'villa/farms'], displayName: 'Villa/farms' },
+      'Office': { patterns: ['office'], displayName: 'Office' },
+      'Commercial': { patterns: ['commercial'], displayName: 'Commercial' },
+      'Land': { patterns: ['land', 'land/plot'], displayName: 'Land/Plot' },
+      'Holiday Home': { patterns: ['holiday home', 'holiday homes'], displayName: 'Holiday Home' }
+    };
+    
+    // Single aggregation query to get all counts at once
+    // This is MUCH faster than multiple count queries
+    const categoryStats = await Listing.aggregate([
+      {
+        $match: {
+          isDeleted: { $ne: true },
+          isSold: { $ne: true },
+          $or: [
+            { approvalStatus: 'approved' },
+            { approvalStatus: { $regex: /^approved$/i } }
+          ]
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $toLower: { 
+              $trim: { 
+                input: { 
+                  $ifNull: ['$propertyType', ''] 
+                } 
+              } 
+            }
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Create a map for quick lookup (normalized property types)
+    const statsMap = new Map();
+    categoryStats.forEach(stat => {
+      if (stat._id) {
+        const normalizedType = stat._id.toLowerCase().trim();
+        // Store both exact match and allow pattern matching
+        if (!statsMap.has(normalizedType)) {
+          statsMap.set(normalizedType, 0);
+        }
+        statsMap.set(normalizedType, statsMap.get(normalizedType) + stat.count);
+      }
+    });
+    
+    // Map property types to counts using flexible matching
+    const stats = Object.entries(propertyTypeMapping).map(([name, config]) => {
+      let count = 0;
+      const matchedTypes = new Set(); // Track which DB types we've already counted
+      
+      // Try to find matching property type in stats
+      for (const pattern of config.patterns) {
+        const patternLower = pattern.toLowerCase();
+        for (const [dbType, dbCount] of statsMap.entries()) {
+          // Avoid double counting
+          if (matchedTypes.has(dbType)) continue;
+          
+          // Flexible matching: check if pattern matches DB type or vice versa
+          if (dbType.includes(patternLower) || patternLower.includes(dbType) || 
+              dbType === patternLower) {
+            count += dbCount;
+            matchedTypes.add(dbType);
+          }
+        }
+      }
+      
+      // Special handling for Villa/farms - sum villa and farm separately
+      if (name === 'Villa/farms') {
+        for (const [dbType, dbCount] of statsMap.entries()) {
+          if (!matchedTypes.has(dbType) && 
+              (dbType.includes('villa') || dbType.includes('farm'))) {
+            count += dbCount;
+            matchedTypes.add(dbType);
+          }
+        }
+      }
+      
+      return {
+        name,
+        displayName: config.displayName,
+        count,
+        slug: name.toLowerCase().replace(/\s+/g, '-').replace(/\//g, '-')
+      };
+    });
+    
+    // Get total count from aggregation result
+    const totalCount = categoryStats.reduce((sum, stat) => sum + stat.count, 0);
+    
+    const queryTime = Date.now() - startTime;
+    logger.info(`Category stats fetched in ${queryTime}ms: ${stats.length} categories, total: ${totalCount} listings`);
+    
+    // Translate categories if translation function is available
+    const { translateCategories } = require('../utils/translateData');
     const translatedCategories = req.t ? translateCategories(stats, req.t) : stats;
     
-    res.status(200).json({
+    const response = {
       success: true,
       message: req.t ? req.t('category.fetch_success') : 'Categories retrieved successfully',
       data: {
@@ -141,7 +152,17 @@ const getCategoryStats = async (req, res, next) => {
         total: totalCount,
         timestamp: new Date().toISOString()
       }
-    });
+    };
+    
+    // Cache the response for 5 minutes (300 seconds)
+    cache.set(cacheKey, response, 300);
+    
+    // Set cache headers
+    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes HTTP cache
+    res.set('X-Cache', 'MISS');
+    res.set('X-Query-Time', `${queryTime}ms`);
+    
+    res.status(200).json(response);
   } catch (error) {
     logger.error('Error fetching category stats:', error);
     next(error);
@@ -264,9 +285,33 @@ const getAllPropertyTypes = async (req, res, next) => {
   }
 };
 
+/**
+ * Clear category stats cache (useful when listings are added/updated/deleted)
+ */
+const clearCategoryCache = async (req, res, next) => {
+  try {
+    const cache = require('../utils/cache');
+    cache.delete('category_stats_en');
+    cache.delete('category_stats_ar');
+    // Clear all category-related cache keys
+    cache.cleanExpired();
+    
+    logger.info('Category stats cache cleared');
+    
+    res.status(200).json({
+      success: true,
+      message: 'Category cache cleared successfully'
+    });
+  } catch (error) {
+    logger.error('Error clearing category cache:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   getCategoryStats,
   getCategoryDetails,
-  getAllPropertyTypes
+  getAllPropertyTypes,
+  clearCategoryCache
 };
 
