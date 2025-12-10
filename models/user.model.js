@@ -78,6 +78,19 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       default: '',
+      required: function() {
+        return this.role === 'admin';
+      },
+      validate: {
+        validator: function(value) {
+          // If role is admin, phone must be provided and not empty
+          if (this.role === 'admin') {
+            return value && value.trim().length > 0;
+          }
+          return true; // For non-admin, phone is optional
+        },
+        message: 'Phone number is required for admin users'
+      }
     },
     location: {
       type: String,
@@ -107,6 +120,19 @@ const userSchema = new mongoose.Schema(
     whatsapp: {
       type: String,
       default: '',
+      required: function() {
+        return this.role === 'admin';
+      },
+      validate: {
+        validator: function(value) {
+          // If role is admin, whatsapp must be provided and not empty
+          if (this.role === 'admin') {
+            return value && value.trim().length > 0;
+          }
+          return true; // For non-admin, whatsapp is optional
+        },
+        message: 'WhatsApp number is required for admin users'
+      }
     },
     // Agent-specific fields
     posterImage: {

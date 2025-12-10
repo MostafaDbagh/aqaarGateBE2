@@ -17,7 +17,7 @@ const listingSchema = new mongoose.Schema(
     status: { type: String, required: true, enum: ['sale', 'rent'] },   
     rentType: {
       type: String,
-      enum: ['monthly', 'three-month', 'six-month', 'one-year', 'yearly', 'weekly'],
+      enum: ['monthly', 'three-month', 'six-month', 'one-year', 'yearly', 'weekly', 'daily'],
       required: function () {
         return this.status === 'rent';
       }

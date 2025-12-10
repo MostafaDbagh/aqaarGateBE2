@@ -162,8 +162,8 @@ const createListing = async (req, res, next) => {
     }
     
     // Validate rentType if status is rent
-    if (status === 'rent' && rentType && !['monthly', 'three-month', 'six-month', 'one-year', 'yearly', 'weekly'].includes(rentType)) {
-      return next(errorHandler(400, 'RentType must be "monthly", "three-month", "six-month", "one-year", "yearly", or "weekly"'));
+    if (status === 'rent' && rentType && !['monthly', 'three-month', 'six-month', 'one-year', 'yearly', 'weekly', 'daily'].includes(rentType)) {
+      return next(errorHandler(400, 'RentType must be "monthly", "three-month", "six-month", "one-year", "yearly", "weekly", or "daily"'));
     }
 
     // Map state to city (backend schema requires 'city')

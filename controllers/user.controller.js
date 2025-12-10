@@ -13,6 +13,31 @@ const updateUser = async (req, res, next) => {
   if (req.user.id !== req.params.id)
     return next(errorHandler(401, 'You can only update your own account!'));
   try {
+    // Get current user to check role
+    const currentUser = await User.findById(req.params.id);
+    if (!currentUser) {
+      return next(errorHandler(404, 'User not found'));
+    }
+    
+    // Check if updating to admin role or if already admin
+    const newRole = req.body.role || currentUser.role;
+    const isUpdatingToAdmin = newRole === 'admin';
+    const isAlreadyAdmin = currentUser.role === 'admin';
+    
+    // Validate admin requirements if updating to admin or already admin
+    if (isUpdatingToAdmin || isAlreadyAdmin) {
+      // Get phone and whatsapp from request or current user
+      const phone = req.body.phone !== undefined ? req.body.phone : currentUser.phone;
+      const whatsapp = req.body.whatsapp !== undefined ? req.body.whatsapp : currentUser.whatsapp;
+      
+      if (!phone || phone.trim().length === 0) {
+        return next(errorHandler(400, 'Phone number is required for admin users'));
+      }
+      if (!whatsapp || whatsapp.trim().length === 0) {
+        return next(errorHandler(400, 'WhatsApp number is required for admin users'));
+      }
+    }
+    
     // Prepare update object
     const updateData = {};
     
@@ -37,9 +62,11 @@ const updateUser = async (req, res, next) => {
     if (req.body.job !== undefined) updateData.job = req.body.job;
     if (req.body.job_ar !== undefined) updateData.job_ar = req.body.job_ar;
     if (req.body.phone !== undefined) updateData.phone = req.body.phone;
+    if (req.body.whatsapp !== undefined) updateData.whatsapp = req.body.whatsapp;
     if (req.body.location !== undefined) updateData.location = req.body.location;
     if (req.body.location_ar !== undefined) updateData.location_ar = req.body.location_ar;
     if (req.body.city !== undefined) updateData.city = req.body.city;
+    if (req.body.role !== undefined) updateData.role = req.body.role;
     
     // Social media fields
     if (req.body.facebook !== undefined) updateData.facebook = req.body.facebook;

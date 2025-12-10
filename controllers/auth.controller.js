@@ -6,8 +6,18 @@ const logger = require('../utils/logger');
 const { sendOtpEmail } = require('../utils/email');
 
 const signup = async (req, res, next) => {
-  const { username, email, password, role, phone, company, job } = req.body;
+  const { username, email, password, role, phone, whatsapp, company, job } = req.body;
   const hashedPassword = bcryptjs.hashSync(password, 10);
+  
+  // Validate admin requirements
+  if (role === 'admin') {
+    if (!phone || phone.trim().length === 0) {
+      return next(errorHandler(400, 'Phone number is required for admin users'));
+    }
+    if (!whatsapp || whatsapp.trim().length === 0) {
+      return next(errorHandler(400, 'WhatsApp number is required for admin users'));
+    }
+  }
   
   // Build user object with optional agent fields
   const userData = { 
@@ -19,9 +29,16 @@ const signup = async (req, res, next) => {
     hasUnlimitedPoints: false // Default to false, can be set to true later
   };
   
+  // Add admin-specific fields if role is admin
+  if (role === 'admin') {
+    userData.phone = phone;
+    userData.whatsapp = whatsapp;
+  }
+  
   // Add agent-specific fields if role is agent
   if (role === 'agent') {
     if (phone) userData.phone = phone;
+    if (whatsapp) userData.whatsapp = whatsapp;
     if (company) userData.company = company;
     if (job) userData.job = job;
     // Set new agents as blocked by default until admin verification

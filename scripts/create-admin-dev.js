@@ -91,6 +91,8 @@ const createAdmin = async () => {
     const adminEmail = 'admin@aqaargate.com';
     const adminPassword = 'Ca34@Dmh56';
     const adminUsername = 'admin';
+    const adminPhone = '+963999999999'; // Required for admin
+    const adminWhatsapp = '+963999999999'; // Required for admin
     
     // Check if admin already exists
     const existingAdmin = await User.findOne({ email: adminEmail });
@@ -116,6 +118,8 @@ const createAdmin = async () => {
         existingAdmin.hasUnlimitedPoints = true;
         existingAdmin.isTrial = false;
         existingAdmin.isBlocked = false;
+        existingAdmin.phone = adminPhone;
+        existingAdmin.whatsapp = adminWhatsapp;
         await existingAdmin.save();
         console.log('✅ Existing user updated to admin!');
         console.log('📧 Email:', adminEmail);
@@ -134,6 +138,8 @@ const createAdmin = async () => {
       email: adminEmail,
       password: hashedPassword,
       role: 'admin',
+      phone: adminPhone,
+      whatsapp: adminWhatsapp,
       isTrial: false,
       hasUnlimitedPoints: true,
       isBlocked: false
@@ -145,6 +151,8 @@ const createAdmin = async () => {
     console.log('📧 Email:', adminEmail);
     console.log('🔑 Password:', adminPassword);
     console.log('👤 Username:', adminUsername);
+    console.log('📱 Phone:', adminPhone);
+    console.log('💬 WhatsApp:', adminWhatsapp);
     console.log('💾 Database:', databaseName);
     console.log('═══════════════════════════════════════════════════════\n');
     
