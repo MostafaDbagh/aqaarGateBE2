@@ -101,8 +101,26 @@ const filterListings = async (req, res, next) => {
     // Convert Arabic property type to English
     if (propertyType) {
       const englishPropertyType = convertArabicPropertyType(propertyType);
-      filters.propertyType = englishPropertyType;
-      logger.debug(`Property type converted: "${propertyType}" -> "${englishPropertyType}"`);
+      
+      // Use flexible matching for property types (same as category stats)
+      // This ensures consistency between category counts and search results
+      const propertyTypeLower = englishPropertyType.toLowerCase().trim();
+      
+      if (propertyTypeLower === 'villa/farms' || propertyTypeLower === 'villa/farm') {
+        // Match Villa/farms using flexible matching (villa, farm, villa/farms, etc.)
+        // Use $or to match any variation - same logic as category stats
+        filters.$or = filters.$or || [];
+        filters.$or.push(
+          { propertyType: { $regex: /villa/i } },
+          { propertyType: { $regex: /farm/i } },
+          { propertyType: { $regex: /villa\/farm/i } }
+        );
+        logger.debug(`Property type using flexible matching for Villa/farms`);
+      } else {
+        // For other types, use exact match (case-insensitive)
+        filters.propertyType = { $regex: new RegExp(`^${englishPropertyType.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
+        logger.debug(`Property type converted: "${propertyType}" -> "${englishPropertyType}" (exact match, case-insensitive)`);
+      }
     }
     if (propertyId) filters.propertyId = propertyId;
     if (agentId) filters.agentId = agentId;
@@ -128,10 +146,23 @@ const filterListings = async (req, res, next) => {
 
     // Keyword (search in both keyword and description)
     if (keyword) {
-      filters.$or = [
+      const keywordConditions = [
         { propertyKeyword: { $regex: keyword, $options: 'i' } },
         { propertyDesc: { $regex: keyword, $options: 'i' } }
       ];
+      
+      // If we already have $or (from Villa/farms), we need to combine with $and
+      if (filters.$or && filters.$or.length > 0) {
+        // Convert existing $or to $and structure
+        const existingConditions = filters.$or;
+        filters.$and = [
+          { $or: existingConditions },
+          { $or: keywordConditions }
+        ];
+        delete filters.$or;
+      } else {
+        filters.$or = keywordConditions;
+      }
     }
 
     // Amenities (match all selected)

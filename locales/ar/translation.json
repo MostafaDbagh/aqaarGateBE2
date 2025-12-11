@@ -62,10 +62,14 @@
     "Homs": "حمص",
     "Latakia": "اللاذقية",
     "Tartus": "طرطوس",
+    "Tartous": "طرطوس",
     "Daraa": "درعا",
     "Hama": "حماة",
     "Idlib": "إدلب",
-    "Der El Zor": "دير الزور"
+    "Der El Zor": "دير الزور",
+    "Deir ez-Zor": "دير الزور",
+    "Deir ez Zor": "دير الزور",
+    "Deir-ez-Zor": "دير الزور"
   },
   "approvalStatus": {
     "pending": "قيد الانتظار",

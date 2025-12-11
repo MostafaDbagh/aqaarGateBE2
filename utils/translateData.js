@@ -168,12 +168,49 @@ function translateCity(city, t) {
 
   // Translate city name
   if (translated.city) {
-    const cityKey = `cities.${translated.city}`;
-    const translatedCityName = t(cityKey);
-    if (translatedCityName && translatedCityName !== cityKey) {
+    // Normalize city name variations to match translation keys
+    const cityNameMap = {
+      'Tartous': 'Tartus',
+      'tartous': 'Tartus',
+      'Tartus': 'Tartus',
+      'Deir ez-Zor': 'Der El Zor',
+      'deir ez-zor': 'Der El Zor',
+      'Deir ez Zor': 'Der El Zor',
+      'deir ez zor': 'Der El Zor',
+      'Deir-ez-Zor': 'Der El Zor',
+      'deir-ez-zor': 'Der El Zor',
+      'Der El Zor': 'Der El Zor',
+      'der el zor': 'Der El Zor'
+    };
+    
+    // Get normalized city name for translation key lookup
+    const normalizedCityName = cityNameMap[translated.city] || translated.city;
+    
+    // Try multiple translation key formats
+    const translationKeys = [
+      `cities.${normalizedCityName}`,
+      `cities.${translated.city}`,
+      `cities.${translated.city.toLowerCase()}`,
+      `cities.${translated.city.toUpperCase()}`
+    ];
+    
+    let translatedCityName = null;
+    for (const key of translationKeys) {
+      const result = t(key);
+      if (result && result !== key) {
+        translatedCityName = result;
+        break;
+      }
+    }
+    
+    // If translation found, use it
+    if (translatedCityName) {
       translated.city = translatedCityName;
       translated.cityOriginal = city.city; // Keep original
       translated.displayName = translatedCityName;
+    } else {
+      // Log for debugging if translation not found
+      console.log(`[translateCity] No translation found for city: "${translated.city}", tried keys: ${translationKeys.join(', ')}`);
     }
   }
 

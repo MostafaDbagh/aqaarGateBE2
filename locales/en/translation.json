@@ -62,10 +62,14 @@
     "Homs": "Homs",
     "Latakia": "Latakia",
     "Tartus": "Tartus",
+    "Tartous": "Tartous",
     "Daraa": "Daraa",
     "Hama": "Hama",
     "Idlib": "Idlib",
-    "Der El Zor": "Der El Zor"
+    "Der El Zor": "Der El Zor",
+    "Deir ez-Zor": "Deir ez-Zor",
+    "Deir ez Zor": "Deir ez-Zor",
+    "Deir-ez-Zor": "Deir ez-Zor"
   },
   "approvalStatus": {
     "pending": "Pending",

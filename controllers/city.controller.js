@@ -107,8 +107,10 @@ const getCityStats = async (req, res, next) => {
       'aleppo': '/images/cities/aleppo.jpg',
       'damascus': '/images/cities/damascus.jpg',
       'daraa': '/images/cities/daraa.webp',
-      'deir ez-zur': '/images/cities/Deir ez-Zur.jpg',
-      'deir ez zur': '/images/cities/Deir ez-Zur.jpg',
+      'deir ez-zor': '/images/cities/Deir ez-Zor.jpg',
+      'deir ez zor': '/images/cities/Deir ez-Zor.jpg',
+      'deir-ez-zor': '/images/cities/Deir ez-Zor.jpg',
+      'deirezzor': '/images/cities/Deir ez-Zor.jpg',
       'hama': '/images/cities/hama.jpg',
       'homs': '/images/cities/Homs.jpg',
       'idlib': '/images/cities/idlib.jpg',
@@ -117,12 +119,37 @@ const getCityStats = async (req, res, next) => {
       'tartous': '/images/cities/tartous.jpg'
     };
     
+    // Helper function to normalize city name for matching
+    const normalizeCityName = (cityName) => {
+      if (!cityName) return '';
+      return cityName.toLowerCase()
+        .trim()
+        .replace(/\s+/g, ' ') // Normalize multiple spaces
+        .replace(/-/g, ' ') // Replace hyphens with spaces
+        .replace(/[^\w\s]/g, ''); // Remove special characters except spaces
+    };
+    
     // Add image paths and normalize city names
     const citiesWithImages = cityStats.map(city => {
-      const cityLower = city.city.toLowerCase().trim();
-      const imageKey = Object.keys(cityImageMap).find(key => 
-        cityLower === key || cityLower.includes(key) || key.includes(cityLower)
+      const cityLower = normalizeCityName(city.city);
+      
+      // Try exact match first
+      let imageKey = Object.keys(cityImageMap).find(key => 
+        cityLower === normalizeCityName(key)
       );
+      
+      // If no exact match, try partial matching
+      if (!imageKey) {
+        imageKey = Object.keys(cityImageMap).find(key => {
+          const normalizedKey = normalizeCityName(key);
+          return cityLower.includes(normalizedKey) || normalizedKey.includes(cityLower);
+        });
+      }
+      
+      // Special handling for Deir ez-Zor variations
+      if (!imageKey && (cityLower.includes('deir') && cityLower.includes('zor'))) {
+        imageKey = 'deir ez-zor';
+      }
       
       return {
         city: city.city,
@@ -137,7 +164,25 @@ const getCityStats = async (req, res, next) => {
     
     // Translate cities if translation function is available
     const { translateCities } = require('../utils/translateData');
-    const translatedCities = req.t ? translateCities(citiesWithImages, req.t) : citiesWithImages;
+    
+    // Always try to translate - use language from request or default to 'en'
+    const requestLanguage = req.language || req.headers['accept-language']?.split(',')[0]?.split('-')[0] || language;
+    
+    // Get translation function if not available on req
+    let translationFunction = req.t;
+    if (!translationFunction) {
+      const { getTranslator } = require('../i18n');
+      translationFunction = getTranslator(requestLanguage);
+      logger.debug(`Translation function created for language: ${requestLanguage}`);
+    }
+    
+    // Translate cities
+    const translatedCities = translationFunction ? translateCities(citiesWithImages, translationFunction) : citiesWithImages;
+    
+    // Debug: Log first city translation for verification
+    if (translatedCities.length > 0) {
+      logger.debug(`First city translation: "${citiesWithImages[0]?.city}" -> "${translatedCities[0]?.city}"`);
+    }
     
     const response = {
       success: true,
