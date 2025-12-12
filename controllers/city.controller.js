@@ -1,29 +1,16 @@
 const Listing = require('../models/listing.model');
 const logger = require('../utils/logger');
-const cache = require('../utils/cache');
 
 /**
  * Get city statistics (counts for each city)
- * OPTIMIZED: Uses single aggregation query + caching for much better performance
+ * OPTIMIZED: Uses single aggregation query for better performance
  * Handles both city and state fields for backward compatibility
+ * NOTE: Caching removed to always show fresh data
  */
 const getCityStats = async (req, res, next) => {
   try {
     const startTime = Date.now();
     const language = req.language || 'en';
-    const cacheKey = `city_stats_${language}`;
-    
-    // Check cache first (5 minute TTL)
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      logger.info(`City stats served from cache (${Date.now() - startTime}ms)`);
-      
-      // Set cache headers for HTTP caching
-      res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
-      res.set('X-Cache', 'HIT');
-      
-      return res.status(200).json(cachedData);
-    }
     
     // Wait for MongoDB connection if not ready
     const mongoose = require('mongoose');
@@ -49,14 +36,20 @@ const getCityStats = async (req, res, next) => {
         $match: {
           isDeleted: { $ne: true },
           isSold: { $ne: true },
-          $or: [
-            { approvalStatus: 'approved' },
-            { approvalStatus: { $regex: /^approved$/i } }
-          ],
-          // Ensure we have a valid city or state
-          $or: [
-            { city: { $exists: true, $ne: null, $ne: '' } },
-            { state: { $exists: true, $ne: null, $ne: '' } }
+          $and: [
+            {
+              $or: [
+                { approvalStatus: 'approved' },
+                { approvalStatus: { $regex: /^approved$/i } }
+              ]
+            },
+            // Ensure we have a valid city or state
+            {
+              $or: [
+                { city: { $exists: true, $ne: null, $ne: '' } },
+                { state: { $exists: true, $ne: null, $ne: '' } }
+              ]
+            }
           ]
         }
       },
@@ -194,12 +187,8 @@ const getCityStats = async (req, res, next) => {
       }
     };
     
-    // Cache the response for 5 minutes (300 seconds)
-    cache.set(cacheKey, response, 300);
-    
-    // Set cache headers
-    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes HTTP cache
-    res.set('X-Cache', 'MISS');
+    // No caching - always return fresh data
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.set('X-Query-Time', `${queryTime}ms`);
     
     res.status(200).json(response);
@@ -365,24 +354,19 @@ const getAllCities = async (req, res, next) => {
 };
 
 /**
- * Clear city stats cache (useful when listings are added/updated/deleted)
+ * Clear city stats cache (deprecated - caching removed)
+ * Kept for backward compatibility but does nothing
  */
 const clearCityCache = async (req, res, next) => {
   try {
-    const cache = require('../utils/cache');
-    cache.delete('city_stats_en');
-    cache.delete('city_stats_ar');
-    // Clear all city-related cache keys
-    cache.cleanExpired();
-    
-    logger.info('City stats cache cleared');
+    logger.info('City cache clear requested (caching is disabled)');
     
     res.status(200).json({
       success: true,
-      message: 'City cache cleared successfully'
+      message: 'Caching is disabled - data is always fresh'
     });
   } catch (error) {
-    logger.error('Error clearing city cache:', error);
+    logger.error('Error in clearCityCache:', error);
     next(error);
   }
 };

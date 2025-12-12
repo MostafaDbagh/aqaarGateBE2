@@ -268,17 +268,7 @@ const createListing = async (req, res, next) => {
     logger.info(`💰 Property Price - Saved in DB: ${newListing.propertyPrice}, Type: ${typeof newListing.propertyPrice}, String: ${newListing.propertyPrice.toString()}`);
     logger.info(`✅ Listing created successfully: ${newListing._id}`);
 
-    // Clear category and city cache when new listing is created
-    try {
-      const cache = require('../utils/cache');
-      cache.delete('category_stats_en');
-      cache.delete('category_stats_ar');
-      cache.delete('city_stats_en');
-      cache.delete('city_stats_ar');
-      logger.info('Cache cleared after listing creation');
-    } catch (cacheError) {
-      logger.warn('Failed to clear cache:', cacheError.message);
-    }
+    // Cache removed - data is always fresh now
 
     // Store listing ID for point deduction middleware
     req.listingId = newListing._id;
@@ -361,17 +351,7 @@ const deleteListing = async (req, res, next) => {
     listing.deletedAt = new Date();
     await listing.save();
 
-    // Clear category and city cache when listing is deleted
-    try {
-      const cache = require('../utils/cache');
-      cache.delete('category_stats_en');
-      cache.delete('category_stats_ar');
-      cache.delete('city_stats_en');
-      cache.delete('city_stats_ar');
-      logger.info('Cache cleared after listing deletion');
-    } catch (cacheError) {
-      logger.warn('Failed to clear cache:', cacheError.message);
-    }
+    // Cache removed - data is always fresh now
 
     // Delete all favorites associated with this deleted listing
     // This ensures favorites count is accurate and users don't see deleted listings in favorites
@@ -564,17 +544,7 @@ const updateListing = async (req, res, next) => {
       { new: true }
     );
     
-    // Clear category and city cache when listing is updated
-    try {
-      const cache = require('../utils/cache');
-      cache.delete('category_stats_en');
-      cache.delete('category_stats_ar');
-      cache.delete('city_stats_en');
-      cache.delete('city_stats_ar');
-      logger.info('Cache cleared after listing update');
-    } catch (cacheError) {
-      logger.warn('Failed to clear cache:', cacheError.message);
-    }
+    // Cache removed - data is always fresh now
     
     // Log the saved approvalStatus to verify it matches what we intended
     logger.info(`📋 Update Listing - Saved approvalStatus in DB: ${updatedListing.approvalStatus}, Original was: ${listing.approvalStatus}`);

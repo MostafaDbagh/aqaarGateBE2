@@ -1,28 +1,15 @@
 const Listing = require('../models/listing.model');
 const logger = require('../utils/logger');
-const cache = require('../utils/cache');
 
 /**
  * Get category statistics (counts for each property type)
- * OPTIMIZED: Uses single aggregation query + caching for much better performance
+ * OPTIMIZED: Uses single aggregation query for better performance
+ * NOTE: Caching removed to always show fresh data
  */
 const getCategoryStats = async (req, res, next) => {
   try {
     const startTime = Date.now();
     const language = req.language || 'en';
-    const cacheKey = `category_stats_${language}`;
-    
-    // Check cache first (5 minute TTL)
-    const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      logger.info(`Category stats served from cache (${Date.now() - startTime}ms)`);
-      
-      // Set cache headers for HTTP caching
-      res.set('Cache-Control', 'public, max-age=300'); // 5 minutes
-      res.set('X-Cache', 'HIT');
-      
-      return res.status(200).json(cachedData);
-    }
     
     // Wait for MongoDB connection if not ready
     const mongoose = require('mongoose');
@@ -154,12 +141,8 @@ const getCategoryStats = async (req, res, next) => {
       }
     };
     
-    // Cache the response for 5 minutes (300 seconds)
-    cache.set(cacheKey, response, 300);
-    
-    // Set cache headers
-    res.set('Cache-Control', 'public, max-age=300'); // 5 minutes HTTP cache
-    res.set('X-Cache', 'MISS');
+    // No caching - always return fresh data
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.set('X-Query-Time', `${queryTime}ms`);
     
     res.status(200).json(response);
@@ -286,24 +269,19 @@ const getAllPropertyTypes = async (req, res, next) => {
 };
 
 /**
- * Clear category stats cache (useful when listings are added/updated/deleted)
+ * Clear category stats cache (deprecated - caching removed)
+ * Kept for backward compatibility but does nothing
  */
 const clearCategoryCache = async (req, res, next) => {
   try {
-    const cache = require('../utils/cache');
-    cache.delete('category_stats_en');
-    cache.delete('category_stats_ar');
-    // Clear all category-related cache keys
-    cache.cleanExpired();
-    
-    logger.info('Category stats cache cleared');
+    logger.info('Category cache clear requested (caching is disabled)');
     
     res.status(200).json({
       success: true,
-      message: 'Category cache cleared successfully'
+      message: 'Caching is disabled - data is always fresh'
     });
   } catch (error) {
-    logger.error('Error clearing category cache:', error);
+    logger.error('Error in clearCategoryCache:', error);
     next(error);
   }
 };
