@@ -744,8 +744,9 @@ const getFilteredListings = async (req, res, next) => {
     // Get filters and sort options from middleware
     const filters = req.filter || {};
     const sortOptions = req.sortOptions || { createdAt: -1 };
-    const limit = parseInt(req.query.limit) || 12;
-    const skip = parseInt(req.query.skip) || 0;
+    const limit = parseInt(req.query.limit) || parseInt(req.query.pageSize) || 12;
+    const page = parseInt(req.query.page) || 1;
+    const skip = (page - 1) * limit;
     
     // Add filter to exclude deleted listings
     filters.isDeleted = { $ne: true };
@@ -818,6 +819,10 @@ const getFilteredListings = async (req, res, next) => {
     
     logger.debug('getFilteredListings - found', listings.length, 'listings');
     
+    // Get total count for pagination
+    const total = await Listing.countDocuments(filters);
+    const totalPages = Math.ceil(total / limit);
+    
     // Log sample of listings for debugging
     if (listings.length > 0) {
       logger.debug('Sample listing:', {
@@ -837,7 +842,19 @@ const getFilteredListings = async (req, res, next) => {
       logger.debug('Non-deleted listings in database:', nonDeletedCount);
     }
     
-    res.status(200).json(translatedListings);
+    // Return listings with pagination info
+    res.status(200).json({
+      success: true,
+      data: translatedListings,
+      pagination: {
+        page: page,
+        limit: limit,
+        total: total,
+        totalPages: totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (error) {
     logger.error('getFilteredListings error:', error);
     next(error);
