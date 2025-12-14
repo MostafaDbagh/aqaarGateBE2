@@ -1028,13 +1028,11 @@ const aiSearch = async (req, res, next) => {
       filters.status = extractedParams.status;
     }
 
-    // IGNORE rent type filter for AI search - show all rent types
-    // When user searches "فيلات للايجار بشكل شهري", show all villas for rent (12 results)
-    // not just those with monthly rentType (4 results)
-    // Rent type is extracted for information but not used as a filter
+    // Apply rent type filter for AI search
+    // When user searches "فيلات اجار بشكل يومي", show only villas with rentType: 'daily'
     if (extractedParams.status === 'rent' && extractedParams.rentType) {
-      logger.info(`⚠️  AI Search - Ignoring rent type filter: "${extractedParams.rentType}" (showing all rent types)`);
-      // Rent type filter is intentionally NOT applied to show all results
+      filters.rentType = extractedParams.rentType;
+      logger.info(`✅ AI Search - Filtering by rent type: "${extractedParams.rentType}"`);
     }
 
     // Apply city filter (case-insensitive regex for flexible matching)

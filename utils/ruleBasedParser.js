@@ -657,7 +657,7 @@ const parseQuery = (query) => {
     if (!extractedParams.status) {
       // Rent variations
       if (query.includes('للإيجار') || query.includes('للايجار') || 
-          query.includes('إيجار') || query.includes('ايجار') ||
+          query.includes('إيجار') || query.includes('ايجار') || query.includes('اجار') ||
           query.includes('استئجار') || query.includes('استاجار') ||
           query.includes('تأجير') || query.includes('تاجير') ||
           query.includes('للاستئجار') || query.includes('للاستاجار') ||
@@ -703,39 +703,39 @@ const parseQuery = (query) => {
       // Arabic patterns for rent type
       // Daily: إيجار يومي, ايجار يومي, يومي, يوميا, بشكل يومي, للايجار اليومي
       if (!extractedParams.rentType) {
-        if (query.includes('إيجار يومي') || query.includes('ايجار يومي') || 
+        if (query.includes('إيجار يومي') || query.includes('ايجار يومي') || query.includes('اجار يومي') || 
             query.includes('للايجار اليومي') || query.includes('للإيجار اليومي') ||
             query.includes('بشكل يومي') || query.includes('بشكل يومي') ||
             query.includes('يوميا') || query.includes('يومياً') ||
-            (query.includes('يومي') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
+            (query.includes('يومي') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('اجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
           extractedParams.rentType = 'daily';
           logger.info('✅ Found rent type: daily (Arabic)');
         }
         // Weekly: إيجار أسبوعي, ايجار اسبوعي, أسبوعي, أسبوعيا, بشكل أسبوعي
-        else if (query.includes('إيجار أسبوعي') || query.includes('ايجار اسبوعي') || 
+        else if (query.includes('إيجار أسبوعي') || query.includes('ايجار اسبوعي') || query.includes('اجار اسبوعي') || 
                  query.includes('للايجار الاسبوعي') || query.includes('للإيجار الأسبوعي') ||
                  query.includes('بشكل أسبوعي') || query.includes('بشكل اسبوعي') ||
                  query.includes('أسبوعيا') || query.includes('اسبوعيا') ||
-                 (query.includes('أسبوعي') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
+                 (query.includes('أسبوعي') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('اجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
           extractedParams.rentType = 'weekly';
           logger.info('✅ Found rent type: weekly (Arabic)');
         }
         // Monthly: إيجار شهري, ايجار شهري, شهري, شهريا, بشكل شهري, للايجار الشهري
-        else if (query.includes('إيجار شهري') || query.includes('ايجار شهري') || 
+        else if (query.includes('إيجار شهري') || query.includes('ايجار شهري') || query.includes('اجار شهري') || 
                  query.includes('للايجار الشهري') || query.includes('للإيجار الشهري') ||
                  query.includes('بشكل شهري') || query.includes('بشكل شهري') ||
                  query.includes('شهريا') || query.includes('شهرياً') ||
-                 (query.includes('شهري') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
+                 (query.includes('شهري') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('اجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
           extractedParams.rentType = 'monthly';
           logger.info('✅ Found rent type: monthly (Arabic)');
         }
         // Yearly: إيجار سنوي, ايجار سنوي, سنوي, سنويا, بشكل سنوي, سنة, للايجار السنوي
-        else if (query.includes('إيجار سنوي') || query.includes('ايجار سنوي') || 
+        else if (query.includes('إيجار سنوي') || query.includes('ايجار سنوي') || query.includes('اجار سنوي') || 
                  query.includes('للايجار السنوي') || query.includes('للإيجار السنوي') ||
                  query.includes('بشكل سنوي') || query.includes('بشكل سنوي') ||
                  query.includes('سنويا') || query.includes('سنوياً') ||
-                 (query.includes('سنة') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار'))) ||
-                 (query.includes('سنوي') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
+                 (query.includes('سنة') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('اجار') || query.includes('للايجار') || query.includes('للإيجار'))) ||
+                 (query.includes('سنوي') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('اجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
           extractedParams.rentType = 'yearly';
           logger.info('✅ Found rent type: yearly (Arabic)');
         }
