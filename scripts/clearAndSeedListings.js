@@ -1,14 +1,11 @@
 /**
- * Script to add test listings for agent mostafa@burjx.com
- * Creates: 5 Villas, 15 Apartments, 10 Offices, 10 Land, 10 Commercial
- * All in different Syrian cities with Google Maps locations
+ * Script to clear all listings and add 100 new listings with USD prices only
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const Listing = require('../models/listing.model');
 const User = require('../models/user.model');
-const bcryptjs = require('bcryptjs');
 
 // Use the same database connection logic as the main app
 const getDatabaseConnection = () => {
@@ -67,28 +64,43 @@ const getDatabaseConnection = () => {
 
 // Syrian cities with coordinates for Google Maps
 const syrianCities = [
-  { name: 'Damascus', coords: '33.5138,36.2765', neighborhoods: ['Old City', 'Mazzeh', 'Kafr Sousa', 'Mezzeh'] },
-  { name: 'Aleppo', coords: '36.2021,37.1343', neighborhoods: ['Old City', 'Aziziyeh', 'Suleimaniyeh', 'New Aleppo'] },
-  { name: 'Latakia', coords: '35.5167,35.7833', neighborhoods: ['Corniche', 'Downtown', 'Al-Samra', 'Al-Aziziyah'] },
-  { name: 'Homs', coords: '34.7339,36.7139', neighborhoods: ['Old City', 'Al-Waer', 'Al-Hamidiyah', 'Al-Ghouta'] },
-  { name: 'Hama', coords: '35.1313,36.7558', neighborhoods: ['Old City', 'Al-Hamidiyah', 'Al-Shaar', 'Al-Midan'] },
-  { name: 'Tartous', coords: '34.8886,35.8864', neighborhoods: ['Corniche', 'Old City', 'Al-Samra', 'Al-Aziziyah'] },
-  { name: 'Deir ez-Zor', coords: '35.3333,40.1500', neighborhoods: ['Old City', 'Al-Joura', 'Al-Qusour', 'Al-Rashidiyah'] },
-  { name: 'Daraa', coords: '32.6189,36.1019', neighborhoods: ['Old City', 'Al-Mahatta', 'Al-Sad Road', 'Al-Kashef'] },
-  { name: 'Idlib', coords: '35.9333,36.6333', neighborhoods: ['City Center', 'Al-Midan', 'Al-Shaar', 'Al-Hamidiyah'] }
+  { name: 'Damascus', coords: '33.5138,36.2765', neighborhoods: ['Old City', 'Mazzeh', 'Kafr Sousa', 'Mezzeh', 'Downtown'] },
+  { name: 'Aleppo', coords: '36.2021,37.1343', neighborhoods: ['Old City', 'Aziziyeh', 'Suleimaniyeh', 'New Aleppo', 'Al-Shaar'] },
+  { name: 'Latakia', coords: '35.5167,35.7833', neighborhoods: ['Corniche', 'Downtown', 'Al-Samra', 'Al-Aziziyah', 'Al-Midan'] },
+  { name: 'Homs', coords: '34.7339,36.7139', neighborhoods: ['Old City', 'Al-Waer', 'Al-Hamidiyah', 'Al-Ghouta', 'Al-Khalidiyah'] },
+  { name: 'Hama', coords: '35.1313,36.7558', neighborhoods: ['Old City', 'Al-Hamidiyah', 'Al-Shaar', 'Al-Midan', 'Al-Kornish'] },
+  { name: 'Tartus', coords: '34.8886,35.8864', neighborhoods: ['Corniche', 'Old City', 'Al-Samra', 'Al-Aziziyah', 'Al-Midan'] },
+  { name: 'Deir ez-Zur', coords: '35.3333,40.1500', neighborhoods: ['Old City', 'Al-Joura', 'Al-Qusour', 'Al-Rashidiyah', 'Al-Sinaa'] },
+  { name: 'Daraa', coords: '32.6189,36.1019', neighborhoods: ['Old City', 'Al-Mahatta', 'Al-Sad Road', 'Al-Kashef', 'Al-Balad'] },
+  { name: 'Idlib', coords: '35.9333,36.6333', neighborhoods: ['City Center', 'Al-Midan', 'Al-Shaar', 'Al-Hamidiyah', 'Al-Kashef'] },
+  { name: 'As-Suwayda', coords: '32.7089,36.5694', neighborhoods: ['City Center', 'Al-Midan', 'Al-Shaar', 'Al-Hamidiyah', 'Al-Kashef'] },
+  { name: 'Raqqah', coords: '35.9500,39.0167', neighborhoods: ['City Center', 'Al-Midan', 'Al-Shaar', 'Al-Hamidiyah', 'Al-Kashef'] }
+];
+
+// Property types distribution (100 listings total)
+const propertyTypes = [
+  { type: 'Apartment', count: 30 },
+  { type: 'Villa/farms', count: 20 },
+  { type: 'Office', count: 15 },
+  { type: 'Commercial', count: 15 },
+  { type: 'Land', count: 12 },
+  { type: 'House', count: 5 },
+  { type: 'Holiday Home', count: 3 }
 ];
 
 // Generate random number between min and max
 const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-// Generate random price based on property type
+// Generate random price in USD based on property type
 const getPrice = (propertyType, status) => {
   const basePrices = {
     'Villa/farms': { sale: [150000, 500000], rent: [800, 3000] },
     'Apartment': { sale: [30000, 150000], rent: [200, 1500] },
     'Office': { sale: [50000, 200000], rent: [400, 2000] },
     'Land': { sale: [20000, 100000], rent: [100, 800] },
-    'Commercial': { sale: [40000, 300000], rent: [500, 2500] }
+    'Commercial': { sale: [40000, 300000], rent: [500, 2500] },
+    'House': { sale: [80000, 250000], rent: [500, 2000] },
+    'Holiday Home': { sale: [0, 0], rent: [300, 2000] } // Holiday homes are rent only
   };
   
   const ranges = basePrices[propertyType] || { sale: [30000, 150000], rent: [200, 1500] };
@@ -161,6 +173,30 @@ const getPropertyDetails = (propertyType, index) => {
       yearBuilt: random(2012, 2023),
       floor: random(0, 5),
       amenities: ['Parking', 'A/C', 'Security cameras', 'Fiber internet']
+    },
+    'House': {
+      bedrooms: random(3, 5),
+      bathrooms: random(2, 4),
+      size: random(150, 400),
+      landArea: random(200, 600),
+      furnished: index % 2 === 0,
+      garages: true,
+      garageSize: random(1, 2),
+      yearBuilt: random(2010, 2023),
+      floor: random(1, 3),
+      amenities: ['Parking', 'A/C', 'Balcony', 'Solar energy system']
+    },
+    'Holiday Home': {
+      bedrooms: random(2, 4),
+      bathrooms: random(2, 3),
+      size: random(100, 250),
+      landArea: null,
+      furnished: true, // Always furnished
+      garages: index % 2 === 0,
+      garageSize: random(0, 1),
+      yearBuilt: random(2015, 2024),
+      floor: random(1, 3),
+      amenities: ['Parking', 'A/C', 'Balcony', 'Fiber internet', 'Security cameras']
     }
   };
   
@@ -189,18 +225,26 @@ const getDescriptions = (propertyType, city, neighborhood) => {
     'Commercial': {
       en: `Commercial space in ${neighborhood}, ${city}. High-traffic location perfect for retail or business operations.`,
       ar: `مساحة تجارية في ${neighborhood}، ${city}. موقع عالي الحركة مثالي للبيع بالتجزئة أو العمليات التجارية.`
+    },
+    'House': {
+      en: `Charming house in ${neighborhood}, ${city}. Spacious family home with garden and modern amenities.`,
+      ar: `منزل ساحر في ${neighborhood}، ${city}. منزل عائلي واسع مع حديقة ومرافق حديثة.`
+    },
+    'Holiday Home': {
+      en: `Beautiful holiday home in ${neighborhood}, ${city}. Fully furnished vacation rental perfect for short-term stays.`,
+      ar: `بيت عطلة جميل في ${neighborhood}، ${city}. إيجار عطلات مفروش بالكامل مثالي للإقامات قصيرة المدى.`
     }
   };
   
   return descriptions[propertyType] || descriptions['Apartment'];
 };
 
-async function addTestListings() {
+async function clearAndSeedListings() {
   try {
     const { finalURI, databaseName, NODE_ENV } = getDatabaseConnection();
     
     console.log('\n═══════════════════════════════════════════════════════');
-    console.log('🏗️  Adding Test Listings for Agent');
+    console.log('🗑️  Clearing All Listings & Adding 100 New Listings');
     console.log('═══════════════════════════════════════════════════════');
     console.log(`📊 Environment: ${NODE_ENV}`);
     console.log(`💾 Database: ${databaseName}`);
@@ -214,45 +258,38 @@ async function addTestListings() {
     });
     console.log('✅ Connected to MongoDB');
 
-    // Find or create agent
-    const agentEmail = 'mostafa@burjx.com';
-    let agent = await User.findOne({ email: agentEmail });
+    // Step 1: Clear all listings
+    console.log('\n🗑️  Step 1: Clearing all existing listings...');
+    const deleteResult = await Listing.deleteMany({});
+    console.log(`✅ Deleted ${deleteResult.deletedCount} existing listings`);
+
+    // Step 2: Find or create a default agent
+    console.log('\n👤 Step 2: Finding or creating agent...');
+    let agent = await User.findOne({ role: 'agent' });
     
     if (!agent) {
-      console.log(`⚠️  Agent ${agentEmail} not found. Creating agent...`);
+      console.log('⚠️  No agent found. Creating default agent...');
+      const bcryptjs = require('bcryptjs');
       agent = new User({
-        username: 'mostafa_burjx',
-        email: agentEmail,
-        password: bcryptjs.hashSync('Test123!@#', 10),
+        username: 'default_agent',
+        email: 'agent@aqaargate.com',
+        password: bcryptjs.hashSync('Default123!@#', 10),
         role: 'agent',
-        phone: '+963999123456',
-        whatsapp: '+963999123456',
-        company: 'Burjx Real Estate',
+        phone: '+963999000000',
+        whatsapp: '+963999000000',
+        company: 'AqaarGate Real Estate',
         isBlocked: false,
         isTrial: false,
         hasUnlimitedPoints: true
       });
       await agent.save();
-      console.log(`✅ Agent created: ${agentEmail}`);
+      console.log(`✅ Agent created: ${agent.email}`);
     } else {
-      console.log(`✅ Agent found: ${agentEmail} (ID: ${agent._id})`);
-      // Ensure agent has unlimited points for testing
-      if (!agent.hasUnlimitedPoints) {
-        agent.hasUnlimitedPoints = true;
-        await agent.save();
-        console.log('✅ Agent updated with unlimited points');
-      }
+      console.log(`✅ Agent found: ${agent.email} (ID: ${agent._id})`);
     }
 
-    // Property types and counts - Total: 70 listings
-    const propertyTypes = [
-      { type: 'Villa/farms', count: 10 },
-      { type: 'Apartment', count: 25 },
-      { type: 'Office', count: 12 },
-      { type: 'Land', count: 13 },
-      { type: 'Commercial', count: 10 }
-    ];
-
+    // Step 3: Create 100 new listings with USD prices only
+    console.log('\n📝 Step 3: Creating 100 new listings with USD prices only...');
     let totalCreated = 0;
     let cityIndex = 0;
 
@@ -263,9 +300,14 @@ async function addTestListings() {
         const details = getPropertyDetails(type, cityIndex);
         const city = details.city;
         const neighborhood = details.neighborhood;
-        const status = i % 3 === 0 ? 'rent' : 'sale'; // Mix of sale and rent
+        
+        // Mix of sale and rent (but Holiday Home is always rent)
+        const status = type === 'Holiday Home' ? 'rent' : (i % 3 === 0 ? 'rent' : 'sale');
         const price = getPrice(type, status);
-        const currency = i % 4 === 0 ? 'SYP' : i % 4 === 1 ? 'EUR' : i % 4 === 2 ? 'TRY' : 'USD';
+        
+        // ALL PRICES IN USD ONLY
+        const currency = 'USD';
+        
         const descriptions = getDescriptions(type, city.name, neighborhood);
         
         // Generate map location (slight variation in coordinates)
@@ -275,7 +317,7 @@ async function addTestListings() {
         const mapCoords = `${(lat + latVariation).toFixed(4)},${(lng + lngVariation).toFixed(4)}`;
         const mapLocation = `https://www.google.com/maps?q=${mapCoords}&hl=en&z=15&output=embed`;
         
-        const propertyId = `TEST_${type.replace('/', '_')}_${Date.now()}_${i}`;
+        const propertyId = `PROP_${type.replace('/', '_')}_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`;
         
         const listingData = {
           propertyId,
@@ -284,7 +326,7 @@ async function addTestListings() {
           propertyDesc: descriptions.en,
           description_ar: descriptions.ar,
           propertyPrice: price,
-          currency,
+          currency, // USD ONLY
           status,
           rentType: status === 'rent' ? (i % 2 === 0 ? 'monthly' : 'yearly') : undefined,
           bedrooms: details.bedrooms,
@@ -313,8 +355,8 @@ async function addTestListings() {
           approvalStatus: 'approved',
           isSold: false,
           isDeleted: false,
-          notes: `Test listing for ${type} - Created for testing purposes`,
-          notes_ar: `إعلان تجريبي لـ ${type} - تم إنشاؤه لأغراض الاختبار`,
+          notes: `Listing created by seed script - ${type} in ${city.name}`,
+          notes_ar: `إعلان تم إنشاؤه بواسطة سكريبت البذور - ${type} في ${city.name}`,
           images: [],
           imageNames: []
         };
@@ -323,15 +365,15 @@ async function addTestListings() {
           const listing = new Listing(listingData);
           await listing.save();
           totalCreated++;
-          console.log(`   ✅ Created ${type} #${i + 1}: ${propertyId} - ${city.name} - ${currency} ${price.toLocaleString()} (${status})`);
+          console.log(`   ✅ Created ${type} #${i + 1}: ${propertyId.substring(0, 30)}... - ${city.name} - USD $${price.toLocaleString()} (${status})`);
         } catch (error) {
           if (error.code === 11000) {
-            // Duplicate propertyId, try again with timestamp
-            listingData.propertyId = `TEST_${type.replace('/', '_')}_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`;
+            // Duplicate propertyId, try again with new timestamp
+            listingData.propertyId = `PROP_${type.replace('/', '_')}_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}`;
             const listing = new Listing(listingData);
             await listing.save();
             totalCreated++;
-            console.log(`   ✅ Created ${type} #${i + 1}: ${listingData.propertyId} - ${city.name}`);
+            console.log(`   ✅ Created ${type} #${i + 1}: ${listingData.propertyId.substring(0, 30)}... - ${city.name}`);
           } else {
             console.error(`   ❌ Error creating ${type} #${i + 1}:`, error.message);
           }
@@ -342,15 +384,17 @@ async function addTestListings() {
     }
 
     console.log('\n═══════════════════════════════════════════════════════');
-    console.log('✅ Test Listings Created Successfully!');
+    console.log('✅ Database Reset & Seeding Complete!');
     console.log('═══════════════════════════════════════════════════════');
-    console.log(`📊 Total Listings Created: ${totalCreated}`);
-    console.log(`👤 Agent: ${agentEmail}`);
+    console.log(`🗑️  Deleted: ${deleteResult.deletedCount} listings`);
+    console.log(`📝 Created: ${totalCreated} new listings`);
+    console.log(`💰 Currency: ALL PRICES IN USD ONLY`);
+    console.log(`👤 Agent: ${agent.email}`);
     console.log(`💾 Database: ${databaseName}`);
     console.log('═══════════════════════════════════════════════════════\n');
 
   } catch (error) {
-    console.error('❌ Error adding test listings:', error.message);
+    console.error('❌ Error:', error.message);
     if (error.stack) {
       console.error(error.stack);
     }
@@ -363,5 +407,5 @@ async function addTestListings() {
 }
 
 // Run the script
-addTestListings();
+clearAndSeedListings();
 

@@ -3,15 +3,43 @@ require('dotenv').config();
 const User = require('../models/user.model');
 const bcryptjs = require('bcryptjs');
 
+// Ensure we're using production database
+process.env.NODE_ENV = 'production';
+
 const createAdmin = async () => {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/aqaargate');
-    console.log('✅ Connected to MongoDB');
+    // Connect to MongoDB - will use production database
+    const mongoURI = process.env.MONGO_URI || process.env.MONGODB_URI;
+    if (!mongoURI) {
+      console.error('❌ MONGO_URI is not defined in environment variables!');
+      process.exit(1);
+    }
+    
+    // Extract database name and ensure it's production (not _Dev)
+    let dbName = 'SyProperties';
+    const queryIndex = mongoURI.indexOf('?');
+    const uriWithoutQuery = queryIndex !== -1 ? mongoURI.substring(0, queryIndex) : mongoURI;
+    const lastSlashIndex = uriWithoutQuery.lastIndexOf('/');
+    
+    if (lastSlashIndex !== -1 && lastSlashIndex < uriWithoutQuery.length - 1) {
+      dbName = uriWithoutQuery.substring(lastSlashIndex + 1);
+    }
+    
+    // Remove _Dev suffix if present (ensure production database)
+    dbName = dbName.replace(/_Dev$/, '') || 'SyProperties';
+    
+    // Replace database name in URI
+    const baseUri = uriWithoutQuery.substring(0, lastSlashIndex + 1);
+    const queryString = queryIndex !== -1 ? mongoURI.substring(queryIndex) : '';
+    const productionURI = `${baseUri}${dbName}${queryString}`;
+    
+    console.log('🔗 Connecting to PRODUCTION database:', dbName);
+    await mongoose.connect(productionURI);
+    console.log('✅ Connected to MongoDB (PRODUCTION)');
 
     // Admin credentials
     const adminEmail = 'admin@aqaargate.com';
-    const adminPassword = 'Admin@2025!';
+    const adminPassword = 'Ca34@Dmh56';
     const adminUsername = 'admin';
     const adminPhone = '+963999999999'; // Required for admin
     const adminWhatsapp = '+963999999999'; // Required for admin
