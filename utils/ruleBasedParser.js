@@ -130,6 +130,7 @@ const parseQuery = (query) => {
       priceMin: null,
       priceMax: null,
       status: null,
+      rentType: null, // monthly, weekly, daily, three-month, six-month, yearly
       city: null,
       neighborhood: null,
       amenities: [],
@@ -142,6 +143,8 @@ const parseQuery = (query) => {
     // Extract property type
     // First check for "Holiday Home" variations (before checking بيت/منزل alone)
     // This ensures "بيت عطلة" maps to Holiday Home, not Apartment
+    // IMPORTANT: Villas with daily/weekly rent are still Villa/farms, not Holiday Home
+    // Only "بيت" (house/apartment) with daily/weekly rent are Holiday Homes
     if (normalizedQuery.match(/\b(holiday home|holiday homes|vacation home|vacation homes|short-term rental|short term rental|daily rental|weekly rental|tourist house|tourist houses|rental house|rental houses)\b/) ||
         query.includes('بيوت عطلات') || query.includes('بيوت عطلة') ||
         query.includes('بيت عطلة') || query.includes('بيت عطلات') ||
@@ -155,18 +158,11 @@ const parseQuery = (query) => {
         query.includes('بيت للإيجار الأسبوعي') || query.includes('بيت للايجار الاسبوعي') ||
         query.includes('بيت للإيجار القصير') || query.includes('بيت للايجار القصير') ||
         query.includes('بيت إيجار يومي') || query.includes('بيت اجار يومي') ||
-        query.includes('بيت إيجار شهري') || query.includes('بيت اجار شهري') ||
-        query.includes('بيت إيجار سنوي') || query.includes('بيت اجار سنوي') ||
-        query.includes('فلل للإيجار اليومي') || query.includes('فلل للايجار اليومي') ||
-        query.includes('فلل للإيجار الشهري') || query.includes('فلل للايجار الشهري') ||
-        query.includes('فلل للإيجار السنوي') || query.includes('فلل للايجار السنوي') ||
-        query.includes('فيلا للإيجار اليومي') || query.includes('فيلا للايجار اليومي') ||
-        query.includes('فيلا للإيجار الشهري') || query.includes('فيلا للايجار الشهري') ||
         query.includes('إيجار قصير') || query.includes('ايجار قصير') ||
-        query.includes('إيجار يومي') || query.includes('ايجار يومي') ||
-        query.includes('إيجار أسبوعي') || query.includes('ايجار اسبوعي') ||
-        query.includes('إيجار شهري') || query.includes('ايجار شهري') ||
-        query.includes('إيجار سنوي') || query.includes('ايجار سنوي')) {
+        // Note: "فلل للإيجار اليومي" and "فيلا للإيجار اليومي" are NOT Holiday Homes - they are Villa/farms with daily rent
+        // Note: "إيجار يومي" and "إيجار أسبوعي" alone (without villa/fila) are Holiday Homes
+        (query.includes('إيجار يومي') && !query.includes('فيلا') && !query.includes('فيلات') && !query.includes('فلل')) ||
+        (query.includes('إيجار أسبوعي') && !query.includes('فيلا') && !query.includes('فيلات') && !query.includes('فلل'))) {
       extractedParams.propertyType = 'Holiday Home';
     }
     // Then check for "Villa/farms" variations (before checking individual "Villa")
@@ -622,8 +618,15 @@ const parseQuery = (query) => {
           break;
         }
         // Check Arabic names - but avoid matching if it's part of a bathroom word
+        // Normalize query by removing extra spaces for better matching
+        const normalizedQueryForCity = query.replace(/\s+/g, ' ').trim();
         for (const arName of city.ar) {
-          if (query.includes(arName) && !isBathroomWord(query, arName)) {
+          // Normalize Arabic city name by removing spaces for comparison
+          const normalizedArName = arName.replace(/\s+/g, '').trim();
+          const normalizedQueryNoSpaces = normalizedQueryForCity.replace(/\s+/g, '');
+          
+          // Check both with and without spaces
+          if ((query.includes(arName) || normalizedQueryNoSpaces.includes(normalizedArName)) && !isBathroomWord(query, arName)) {
             extractedParams.city = city.en;
             logger.info(`✅ Found city "${arName}" (${city.en}), not part of bathroom word`);
             break;
@@ -669,6 +672,73 @@ const parseQuery = (query) => {
                query.includes('مباعة') || query.includes('للشراء') ||
                query.includes('مبيع') || query.includes('مبيعة')) {
         extractedParams.status = 'sale';
+      }
+    }
+
+    // Extract rent type (only if status is rent)
+    // Supported types: daily, weekly, monthly, yearly only
+    // English patterns
+    if (extractedParams.status === 'rent') {
+      // Daily rent
+      if (normalizedQuery.match(/\b(daily|per day|day by day|daily basis|daily rental|daily rent)\b/)) {
+        extractedParams.rentType = 'daily';
+        logger.info('✅ Found rent type: daily');
+      }
+      // Weekly rent
+      else if (normalizedQuery.match(/\b(weekly|per week|week by week|weekly basis|weekly rental|weekly rent)\b/)) {
+        extractedParams.rentType = 'weekly';
+        logger.info('✅ Found rent type: weekly');
+      }
+      // Monthly rent
+      else if (normalizedQuery.match(/\b(monthly|per month|month by month|monthly basis|monthly rental|monthly rent)\b/)) {
+        extractedParams.rentType = 'monthly';
+        logger.info('✅ Found rent type: monthly');
+      }
+      // Yearly/One-year rent
+      else if (normalizedQuery.match(/\b(yearly|per year|year by year|annual|annually|one-year|one year|1-year|1 year|yearly basis|yearly rental|yearly rent)\b/)) {
+        extractedParams.rentType = 'yearly';
+        logger.info('✅ Found rent type: yearly');
+      }
+      
+      // Arabic patterns for rent type
+      // Daily: إيجار يومي, ايجار يومي, يومي, يوميا, بشكل يومي, للايجار اليومي
+      if (!extractedParams.rentType) {
+        if (query.includes('إيجار يومي') || query.includes('ايجار يومي') || 
+            query.includes('للايجار اليومي') || query.includes('للإيجار اليومي') ||
+            query.includes('بشكل يومي') || query.includes('بشكل يومي') ||
+            query.includes('يوميا') || query.includes('يومياً') ||
+            (query.includes('يومي') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
+          extractedParams.rentType = 'daily';
+          logger.info('✅ Found rent type: daily (Arabic)');
+        }
+        // Weekly: إيجار أسبوعي, ايجار اسبوعي, أسبوعي, أسبوعيا, بشكل أسبوعي
+        else if (query.includes('إيجار أسبوعي') || query.includes('ايجار اسبوعي') || 
+                 query.includes('للايجار الاسبوعي') || query.includes('للإيجار الأسبوعي') ||
+                 query.includes('بشكل أسبوعي') || query.includes('بشكل اسبوعي') ||
+                 query.includes('أسبوعيا') || query.includes('اسبوعيا') ||
+                 (query.includes('أسبوعي') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
+          extractedParams.rentType = 'weekly';
+          logger.info('✅ Found rent type: weekly (Arabic)');
+        }
+        // Monthly: إيجار شهري, ايجار شهري, شهري, شهريا, بشكل شهري, للايجار الشهري
+        else if (query.includes('إيجار شهري') || query.includes('ايجار شهري') || 
+                 query.includes('للايجار الشهري') || query.includes('للإيجار الشهري') ||
+                 query.includes('بشكل شهري') || query.includes('بشكل شهري') ||
+                 query.includes('شهريا') || query.includes('شهرياً') ||
+                 (query.includes('شهري') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
+          extractedParams.rentType = 'monthly';
+          logger.info('✅ Found rent type: monthly (Arabic)');
+        }
+        // Yearly: إيجار سنوي, ايجار سنوي, سنوي, سنويا, بشكل سنوي, سنة, للايجار السنوي
+        else if (query.includes('إيجار سنوي') || query.includes('ايجار سنوي') || 
+                 query.includes('للايجار السنوي') || query.includes('للإيجار السنوي') ||
+                 query.includes('بشكل سنوي') || query.includes('بشكل سنوي') ||
+                 query.includes('سنويا') || query.includes('سنوياً') ||
+                 (query.includes('سنة') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار'))) ||
+                 (query.includes('سنوي') && (query.includes('إيجار') || query.includes('ايجار') || query.includes('للايجار') || query.includes('للإيجار')))) {
+          extractedParams.rentType = 'yearly';
+          logger.info('✅ Found rent type: yearly (Arabic)');
+        }
       }
     }
 
@@ -1695,10 +1765,39 @@ const parseQuery = (query) => {
               potentialNeighborhood.toLowerCase() === 'syria') {
             continue; // Skip "سوريا"/"Syria" - don't set it as neighborhood
           }
-          // Don't set if it's a city name
-          const isCity = SYRIAN_CITIES.some(c => 
-            c.ar.some(arName => query.includes(arName) && arName === potentialNeighborhood)
-          );
+          // Don't set if it's a city name or part of a city name
+          // Check if potentialNeighborhood is part of any city name in Arabic
+          const isCity = SYRIAN_CITIES.some(c => {
+            // Check if any Arabic city name contains this potential neighborhood
+            return c.ar.some(arName => {
+              // Check exact match
+              if (arName === potentialNeighborhood) return true;
+              // Check if potentialNeighborhood is part of city name (e.g., "دير" is part of "دير الزور")
+              if (arName.includes(potentialNeighborhood) && potentialNeighborhood.length >= 3) {
+                // Make sure it's not just a common word
+                const cityNameNoSpaces = arName.replace(/\s+/g, '');
+                const potentialNoSpaces = potentialNeighborhood.replace(/\s+/g, '');
+                return cityNameNoSpaces.includes(potentialNoSpaces);
+              }
+              return false;
+            });
+          });
+          
+          // Also check if we already extracted a city and this neighborhood is part of that city name
+          if (extractedParams.city) {
+            const cityInfo = SYRIAN_CITIES.find(c => c.en === extractedParams.city);
+            if (cityInfo) {
+              const isPartOfCityName = cityInfo.ar.some(arName => {
+                const arNameNoSpaces = arName.replace(/\s+/g, '');
+                const potentialNoSpaces = potentialNeighborhood.replace(/\s+/g, '');
+                return arNameNoSpaces.includes(potentialNoSpaces) && potentialNoSpaces.length >= 3;
+              });
+              if (isPartOfCityName) {
+                continue; // Skip - it's part of the city name, not a neighborhood
+              }
+            }
+          }
+          
           if (!isCity && potentialNeighborhood.length > 2) {
             extractedParams.neighborhood = potentialNeighborhood;
             break;

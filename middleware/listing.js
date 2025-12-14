@@ -32,6 +32,10 @@ const convertArabicPropertyType = (arabicType) => {
 const convertArabicCity = (arabicCity) => {
   if (!arabicCity || typeof arabicCity !== 'string') return arabicCity;
   
+  // Normalize input: trim and remove extra spaces
+  const normalized = arabicCity.trim().replace(/\s+/g, ' ');
+  const normalizedNoSpaces = normalized.replace(/\s+/g, '');
+  
   const cityMap = {
     'دمشق': 'Damascus',
     'حلب': 'Aleppo',
@@ -41,11 +45,23 @@ const convertArabicCity = (arabicCity) => {
     'درعا': 'Daraa',
     'حماة': 'Hama',
     'إدلب': 'Idlib',
-    'دير الزور': 'Der El Zor',
-    'Deir ez-Zor': 'Der El Zor'
+    'دير الزور': 'Deir ez-Zur',
+    'ديرالزور': 'Deir ez-Zur', // بدون فراغ
+    'الدير': 'Deir ez-Zur',
+    'ديري': 'Deir ez-Zur',
+    'Deir ez-Zor': 'Deir ez-Zur',
+    'Der El Zor': 'Deir ez-Zur',
+    'Deir ez-Zur': 'Deir ez-Zur'
   };
   
-  return cityMap[arabicCity] || arabicCity;
+  // Try exact match first
+  if (cityMap[normalized]) return cityMap[normalized];
+  // Try match without spaces (for "ديرالزور" vs "دير الزور")
+  if (cityMap[normalizedNoSpaces]) return cityMap[normalizedNoSpaces];
+  // Try original input
+  if (cityMap[arabicCity]) return cityMap[arabicCity];
+  
+  return arabicCity;
 };
 
 const filterListings = async (req, res, next) => {
@@ -82,17 +98,19 @@ const filterListings = async (req, res, next) => {
     // Handle city parameter - main field is 'city', but support legacy 'state' parameter
     // Priority: city > cities > state
     // Convert Arabic city names to English
+    // Use case-insensitive regex to handle variations and spaces
     let cityValue = null;
     if (city) {
-      cityValue = convertArabicCity(city);
-      filters.city = cityValue;
+      cityValue = convertArabicCity(city.trim());
+      // Use regex for flexible matching (handles spaces and case variations)
+      filters.city = { $regex: new RegExp(`^${cityValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
     } else if (cities) {
-      cityValue = convertArabicCity(cities);
-      filters.city = cityValue;
+      cityValue = convertArabicCity(cities.trim());
+      filters.city = { $regex: new RegExp(`^${cityValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
     } else if (state) {
       // Legacy support - map state to city for backward compatibility
-      cityValue = convertArabicCity(state);
-      filters.city = cityValue;
+      cityValue = convertArabicCity(state.trim());
+      filters.city = { $regex: new RegExp(`^${cityValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
     }
     
     if (neighborhood) filters.neighborhood = neighborhood;

@@ -1028,14 +1028,28 @@ const aiSearch = async (req, res, next) => {
       filters.status = extractedParams.status;
     }
 
-    // Apply city filter
-    if (extractedParams.city) {
-      filters.city = extractedParams.city;
+    // IGNORE rent type filter for AI search - show all rent types
+    // When user searches "فيلات للايجار بشكل شهري", show all villas for rent (12 results)
+    // not just those with monthly rentType (4 results)
+    // Rent type is extracted for information but not used as a filter
+    if (extractedParams.status === 'rent' && extractedParams.rentType) {
+      logger.info(`⚠️  AI Search - Ignoring rent type filter: "${extractedParams.rentType}" (showing all rent types)`);
+      // Rent type filter is intentionally NOT applied to show all results
     }
 
-    // Apply neighborhood filter (case-insensitive regex)
+    // Apply city filter (case-insensitive regex for flexible matching)
+    if (extractedParams.city) {
+      // Use regex for flexible city matching (handles spaces and case variations)
+      filters.city = { $regex: new RegExp(`^${extractedParams.city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
+      logger.info(`✅ AI Search - Filtering by city: ${extractedParams.city}`);
+    }
+
+    // IGNORE neighborhood filter for AI search - focus on city only
+    // Neighborhood filtering is disabled to avoid false negatives
+    // Users can use regular search filters for neighborhood-specific searches
     if (extractedParams.neighborhood) {
-      filters.neighborhood = { $regex: extractedParams.neighborhood, $options: 'i' };
+      logger.info(`⚠️  AI Search - Ignoring neighborhood filter: "${extractedParams.neighborhood}" (focusing on city only)`);
+      // Neighborhood filter is intentionally NOT applied
     }
 
     // Apply amenities filter
