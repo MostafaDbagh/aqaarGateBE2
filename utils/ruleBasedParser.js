@@ -172,14 +172,16 @@ const parseQuery = (query) => {
       extractedParams.propertyType = 'Villa/farms';
     }
     // Then check for "House" variations (before Apartment to prioritize "منزل" as House)
+    // NOTE: "منازل" (plural) refers to Apartment, not House
     else if (normalizedQuery.match(/\b(house|houses|residential house|residential houses|family house|family houses)\b/) ||
-             query.includes('منزل') || query.includes('منازل')) {
+             query.includes('منزل')) {
       extractedParams.propertyType = 'House';
     }
-    // Then check for "Apartment" variations (before Land to avoid "مساحة" matching Land when "شقة" is present)
-    else if (normalizedQuery.match(/\b(apt|apartment|apartments|flat|flats|unit|units|residential unit|residential units|condo|condos|condominium|condominiums|residence|residences|dwelling|dwellings)\b/) ||
+      // Then check for "Apartment" variations (before Land to avoid "مساحة" matching Land when "شقة" is present)
+      else if (normalizedQuery.match(/\b(apt|apartment|apartments|flat|flats|unit|units|residential unit|residential units|condo|condos|condominium|condominiums|residence|residences|dwelling|dwellings)\b/) ||
              query.includes('شقة') || query.includes('شقق') ||
              query.includes('شقة سكنية') || query.includes('شقق سكنية') ||
+             query.includes('منازل') ||
              query.includes('عقار سكني') || query.includes('عقارات سكنية') ||
              query.includes('وحدة سكنية') || query.includes('وحدات سكنية') ||
              query.includes('سكن') || query.includes('مساكن') ||
