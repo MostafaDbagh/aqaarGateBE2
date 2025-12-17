@@ -980,6 +980,59 @@ const aiSearch = async (req, res, next) => {
       return next(errorHandler(500, `Query parsing failed: ${parseError.message}`));
     }
 
+    // If parser didn't extract anything meaningful, return empty result (avoid showing all listings)
+    const hasMeaningfulParams = () => {
+      if (!extractedParams || typeof extractedParams !== 'object') return false;
+      const {
+        propertyType, bedrooms, bathrooms, sizeMin, sizeMax,
+        priceMin, priceMax, status, city, neighborhood,
+        furnished, garages, viewType, rentType,
+        amenities = [], keywords = []
+      } = extractedParams;
+
+      const hasNeighborhood = Boolean(neighborhood && String(neighborhood).trim().length > 0);
+
+      // Strong signals: any of these alone is enough
+      const hasStrong =
+        propertyType ||
+        status ||
+        city ||
+        viewType ||
+        rentType ||
+        (furnished !== null && furnished !== undefined) ||
+        (garages !== null && garages !== undefined) ||
+        (Array.isArray(amenities) && amenities.length > 0) ||
+        (bedrooms !== null && bedrooms !== undefined) ||
+        (bathrooms !== null && bathrooms !== undefined) ||
+        (sizeMin !== null && sizeMin !== undefined) ||
+        (sizeMax !== null && sizeMax !== undefined) ||
+        (priceMin !== null && priceMin !== undefined) ||
+        (priceMax !== null && priceMax !== undefined);
+
+      // Neighborhood alone is weak; require city with it if there are no strong signals
+      if (hasStrong) return true;
+      if (hasNeighborhood && city) return true;
+      return false;
+    };
+
+    const meaningful = hasMeaningfulParams();
+    if (!meaningful) {
+      logger.warn(`AI Search returned no meaningful params for query: "${query}", responding with empty results.`);
+      return res.status(200).json({
+        success: true,
+        data: [],
+        extractedParams,
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+          hasNextPage: false,
+          hasPrevPage: false
+        }
+      });
+    }
+
     // Build MongoDB query filters from extracted parameters
     const filters = {
       isDeleted: { $ne: true },
