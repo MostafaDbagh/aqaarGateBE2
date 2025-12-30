@@ -1046,8 +1046,24 @@ const aiSearch = async (req, res, next) => {
     }
 
     // Apply numeric filters
+    // For bedrooms: if user searches for "X rooms + salon", search for X or more rooms
+    // This handles cases where properties are listed as "2 rooms" but have a salon (which counts as +1)
     if (extractedParams.bedrooms !== null) {
-      filters.bedrooms = extractedParams.bedrooms;
+      // Check if salon was mentioned in the original query (from keywords)
+      const hasSalonKeyword = extractedParams.keywords && extractedParams.keywords.some(k => 
+        k.toLowerCase().includes('salon') || k.includes('صالون') || k.includes('صالة')
+      );
+      
+      if (hasSalonKeyword && extractedParams.bedrooms > 1) {
+        // If salon was mentioned and bedrooms > 1, search for bedrooms >= (bedrooms - 1)
+        // Example: "غرفتين وصالون" = 3 total, but search for bedrooms >= 2
+        // This finds properties with 2+ rooms (which may have a salon)
+        filters.bedrooms = { $gte: extractedParams.bedrooms - 1 };
+        logger.info(`✅ AI Search - Salon mentioned, searching for bedrooms >= ${extractedParams.bedrooms - 1} (${extractedParams.bedrooms} total including salon)`);
+      } else {
+        // Exact match for bedrooms
+        filters.bedrooms = extractedParams.bedrooms;
+      }
     }
 
     if (extractedParams.bathrooms !== null) {
@@ -1090,9 +1106,10 @@ const aiSearch = async (req, res, next) => {
 
     // Apply city filter (case-insensitive regex for flexible matching)
     if (extractedParams.city) {
-      // Use regex for flexible city matching (handles spaces and case variations)
+      // Use case-insensitive exact match or partial match for city
+      // This handles variations like "Latakia", "latakia", "LATAKIA", etc.
       filters.city = { $regex: new RegExp(`^${extractedParams.city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
-      logger.info(`✅ AI Search - Filtering by city: ${extractedParams.city}`);
+      logger.info(`✅ AI Search - Filtering by city: ${extractedParams.city} (regex: ${filters.city.$regex})`);
     }
 
     // IGNORE neighborhood filter for AI search - focus on city only
@@ -1118,6 +1135,8 @@ const aiSearch = async (req, res, next) => {
     }
 
     // Build keyword search (for view types and other descriptive keywords)
+    // NOTE: We don't search for "salon" in keywords because it's already handled in bedrooms logic
+    // Searching for salon in descriptions would be too restrictive and might miss properties
     const keywordConditions = [];
     
     // Add view type keywords
@@ -1132,14 +1151,23 @@ const aiSearch = async (req, res, next) => {
       });
     }
 
-    // Add other keywords
+    // Add other keywords (but exclude salon-related keywords - they're handled in bedrooms logic)
     if (extractedParams.keywords && extractedParams.keywords.length > 0) {
+      const salonKeywords = ['salon', 'living room', 'صالون', 'صالة', 'صاله'];
       extractedParams.keywords.forEach(keyword => {
-        keywordConditions.push(
-          { propertyKeyword: { $regex: keyword, $options: 'i' } },
-          { propertyDesc: { $regex: keyword, $options: 'i' } },
-          { description_ar: { $regex: keyword, $options: 'i' } }
+        // Skip salon keywords - they're already handled in bedrooms >= logic
+        const isSalonKeyword = salonKeywords.some(sk => 
+          keyword.toLowerCase().includes(sk.toLowerCase()) || 
+          sk.toLowerCase().includes(keyword.toLowerCase())
         );
+        
+        if (!isSalonKeyword) {
+          keywordConditions.push(
+            { propertyKeyword: { $regex: keyword, $options: 'i' } },
+            { propertyDesc: { $regex: keyword, $options: 'i' } },
+            { description_ar: { $regex: keyword, $options: 'i' } }
+          );
+        }
       });
     }
 
@@ -1166,9 +1194,11 @@ const aiSearch = async (req, res, next) => {
       .skip(skip)
       .lean();
 
-    // If no results with exact match, try case-insensitive regex for approvalStatus
+    // If no results with exact match, try fallback strategies
     if (listings.length === 0) {
-      logger.warn('⚠️ AI Search - No listings found with exact match, trying case-insensitive...');
+      logger.warn('⚠️ AI Search - No listings found with exact match, trying fallback strategies...');
+      
+      // Strategy 1: Try case-insensitive regex for approvalStatus
       const filtersWithRegex = { ...filters };
       filtersWithRegex.approvalStatus = { $regex: /^approved$/i };
       
@@ -1177,6 +1207,32 @@ const aiSearch = async (req, res, next) => {
         .limit(limit)
         .skip(skip)
         .lean();
+      
+      // Strategy 2: If still no results and we have bedrooms filter with salon, try searching for exact bedrooms (without salon)
+      if (listings.length === 0 && filters.bedrooms && filters.bedrooms.$gte) {
+        logger.warn(`⚠️ AI Search - No results with bedrooms >= ${filters.bedrooms.$gte}, trying exact bedrooms match...`);
+        const filtersExactBedrooms = { ...filters };
+        filtersExactBedrooms.bedrooms = filters.bedrooms.$gte; // Try exact match for the base number
+        
+        listings = await Listing.find(filtersExactBedrooms)
+          .sort({ createdAt: -1 })
+          .limit(limit)
+          .skip(skip)
+          .lean();
+      }
+      
+      // Strategy 3: If still no results, try without bedrooms filter (only city)
+      if (listings.length === 0 && filters.bedrooms && filters.city) {
+        logger.warn('⚠️ AI Search - No results with bedrooms filter, trying without bedrooms (city only)...');
+        const filtersCityOnly = { ...filters };
+        delete filtersCityOnly.bedrooms;
+        
+        listings = await Listing.find(filtersCityOnly)
+          .sort({ createdAt: -1 })
+          .limit(limit)
+          .skip(skip)
+          .lean();
+      }
     }
 
     // Check if agents are blocked and add blocked flag to listings

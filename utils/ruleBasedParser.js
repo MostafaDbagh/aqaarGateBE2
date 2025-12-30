@@ -373,97 +373,141 @@ const parseQuery = (query) => {
 
     // Extract bedrooms from Arabic (غرفتين = 2 rooms, غرفة = 1 room, etc.)
     // CRITICAL: If "صالون" (salon/living room) is mentioned, add 1 room to the count
+    // Check for "وصالون", "وصالة", "مع صالون", "مع صالة", "صالون", "صالة" patterns
     const hasSalon = query.includes('صالون') || query.includes('صالة') || query.includes('صاله') || 
+                     query.includes('وصالون') || query.includes('وصالة') || query.includes('وصاله') ||
+                     query.includes('مع صالون') || query.includes('مع صالة') || query.includes('مع صاله') ||
                      normalizedQuery.match(/\b(with|has|includes)\s+(?:a\s+)?(?:salon|living room)\b/i);
     
     if (extractedParams.bedrooms === null) {
-      const arabicBedroomPatterns = [
-        /(?:غرفتين|غرفتان|غرفتين|غرفتين)/, // 2 rooms
-        /(?:غرفة|غرفة واحدة)/, // 1 room
-        /(?:ثلاث غرف|ثلاثة غرف)/, // 3 rooms
-        /(?:أ?ر?ب?ع? غرف|أ?ر?ب?ع?ة غرف)/, // 4 rooms (flexible with hamza variations)
-        /(?:خمس غرف|خمسة غرف)/, // 5 rooms
-        /(?:ست غرف|ستة غرف)/, // 6 rooms
-        /(?:سبع غرف|سبعة غرف)/, // 7 rooms
-        /(?:ثمان غرف|ثمانية غرف)/, // 8 rooms
-        /(?:تسع غرف|تسعة غرف)/, // 9 rooms
-        /(?:عشر غرف|عشرة غرف)/, // 10 rooms
-        /([٠-٩\d]+)\s*(?:غرفة|غرف)(?!\s*(?:مساحة|المساحة|حجم|size|area))/, // Number (Arabic or Latin) + room(s) - but not if followed by size words
-        /(?:غرف|غرفة)\s*([٠-٩\d]+)/ // room(s) + number (Arabic or Latin)
-      ];
+      // First, check for patterns with "وصالون" or "وصالة" explicitly
+      // This ensures we catch "غرفتين وصالون", "ثلاث غرف وصالون", "غرفة وصالون"
+      let bedroomCount = null;
+      
+      // Check for "غرفتين وصالون" or "غرفتين وصالة" = 2 + 1 = 3
+      if (query.match(/غرفتين\s*(?:و|مع)\s*(?:صالون|صالة|صاله)/) || 
+          query.match(/غرفتان\s*(?:و|مع)\s*(?:صالون|صالة|صاله)/)) {
+        bedroomCount = 2;
+      }
+      // Check for "ثلاث غرف وصالون" or "ثلاثة غرف وصالون" = 3 + 1 = 4
+      else if (query.match(/ثلاث\s*غرف\s*(?:و|مع)\s*(?:صالون|صالة|صاله)/) || 
+               query.match(/ثلاثة\s*غرف\s*(?:و|مع)\s*(?:صالون|صالة|صاله)/)) {
+        bedroomCount = 3;
+      }
+      // Check for "غرفة وصالون" or "غرفة وصالة" = 1 + 1 = 2
+      else if (query.match(/غرفة\s*(?:و|مع)\s*(?:صالون|صالة|صاله)/) && 
+               !query.includes('غرفتين') && !query.includes('ثلاث غرف') && !query.includes('ثلاثة غرف')) {
+        bedroomCount = 1;
+      }
+      // Check for "أربع غرف وصالون" = 4 + 1 = 5
+      else if (query.match(/(?:أربع|أربعة|اربع|اربع)\s*غرف\s*(?:و|مع)\s*(?:صالون|صالة|صاله)/)) {
+        bedroomCount = 4;
+      }
+      // Check for "خمس غرف وصالون" = 5 + 1 = 6
+      else if (query.match(/(?:خمس|خمسة)\s*غرف\s*(?:و|مع)\s*(?:صالون|صالة|صاله)/)) {
+        bedroomCount = 5;
+      }
+      // If no explicit "وصالون" pattern found, use the original patterns
+      else {
+        const arabicBedroomPatterns = [
+          /(?:غرفتين|غرفتان|غرفتين|غرفتين)/, // 2 rooms
+          /(?:غرفة|غرفة واحدة)/, // 1 room
+          /(?:ثلاث غرف|ثلاثة غرف)/, // 3 rooms
+          /(?:أ?ر?ب?ع? غرف|أ?ر?ب?ع?ة غرف)/, // 4 rooms (flexible with hamza variations)
+          /(?:خمس غرف|خمسة غرف)/, // 5 rooms
+          /(?:ست غرف|ستة غرف)/, // 6 rooms
+          /(?:سبع غرف|سبعة غرف)/, // 7 rooms
+          /(?:ثمان غرف|ثمانية غرف)/, // 8 rooms
+          /(?:تسع غرف|تسعة غرف)/, // 9 rooms
+          /(?:عشر غرف|عشرة غرف)/, // 10 rooms
+          /([٠-٩\d]+)\s*(?:غرفة|غرف)(?!\s*(?:مساحة|المساحة|حجم|size|area))/, // Number (Arabic or Latin) + room(s) - but not if followed by size words
+          /(?:غرف|غرفة)\s*([٠-٩\d]+)/ // room(s) + number (Arabic or Latin)
+        ];
 
-      for (const pattern of arabicBedroomPatterns) {
-        const match = query.match(pattern);
-        if (match) {
-          let bedroomCount = null;
-          
-          // Check for numeric patterns first (Arabic or Latin) - highest priority
-          // BUT: Skip if this number is part of a size pattern (e.g., "مساحة اقل من ٨٠")
-          if (match[1] && /[٠-٩\d]/.test(match[1])) {
-            const num = extractNumber(match[1]);
-            if (num !== null && num > 0) {
-              // Check if this number is part of a size pattern by looking before the match
-              const matchIndex = query.indexOf(match[1]);
-              if (matchIndex > 0) {
-                const beforeMatch = query.substring(Math.max(0, matchIndex - 30), matchIndex);
-                if (!beforeMatch.match(/مساحة.*[٠-٩\d]*$/)) {
+        for (const pattern of arabicBedroomPatterns) {
+          const match = query.match(pattern);
+          if (match) {
+            // Check for numeric patterns first (Arabic or Latin) - highest priority
+            // BUT: Skip if this number is part of a size pattern (e.g., "مساحة اقل من ٨٠")
+            if (match[1] && /[٠-٩\d]/.test(match[1])) {
+              const num = extractNumber(match[1]);
+              if (num !== null && num > 0) {
+                // Check if this number is part of a size pattern by looking before the match
+                const matchIndex = query.indexOf(match[1]);
+                if (matchIndex > 0) {
+                  const beforeMatch = query.substring(Math.max(0, matchIndex - 30), matchIndex);
+                  if (!beforeMatch.match(/مساحة.*[٠-٩\d]*$/)) {
+                    bedroomCount = num;
+                    break;
+                  }
+                } else {
                   bedroomCount = num;
+                  break;
+                }
+              }
+            } else if (query.includes('غرفتين') || query.includes('غرفتان')) {
+              bedroomCount = 2;
+              break;
+            } else if (query.includes('غرفة واحدة')) {
+              // "غرفة واحدة" explicitly means 1 room
+              bedroomCount = 1;
+              break;
+            } else if (query.includes('غرفة') && !query.includes('غرفتين') && 
+                       !query.includes('ثلاث غرف') && !query.includes('ثلاثة غرف') &&
+                       !query.includes('أربع غرف') && !query.includes('أربعة غرف') && 
+                       !query.includes('اربع غرف') && !query.includes('اربع غرف') &&
+                       !query.includes('خمس غرف') && !query.includes('خمسة غرف') &&
+                       !query.match(/[٠-٩\d]+\s*غرف/)) {
+              // Make sure "غرفة" is not part of a size pattern (e.g., "مساحة اقل من ٨٠")
+              // Check if there's a size pattern before "غرفة" that might have matched the number
+              const roomIndex = query.indexOf('غرفة');
+              if (roomIndex > 0) {
+                const beforeRoom = query.substring(Math.max(0, roomIndex - 30), roomIndex);
+                // Only skip if there's a size number immediately before "غرفة"
+                if (!beforeRoom.match(/مساحة.*[٠-٩\d]+\s*$/)) {
+                  bedroomCount = 1;
+                  break;
                 }
               } else {
-                bedroomCount = num;
-              }
-            }
-          } else if (query.includes('غرفتين') || query.includes('غرفتان')) {
-            bedroomCount = 2;
-          } else if (query.includes('غرفة واحدة')) {
-            // "غرفة واحدة" explicitly means 1 room
-            bedroomCount = 1;
-          } else if (query.includes('غرفة') && !query.includes('غرفتين') && 
-                     !query.includes('ثلاث غرف') && !query.includes('ثلاثة غرف') &&
-                     !query.includes('أربع غرف') && !query.includes('أربعة غرف') && 
-                     !query.includes('اربع غرف') && !query.includes('اربع غرف') &&
-                     !query.includes('خمس غرف') && !query.includes('خمسة غرف') &&
-                     !query.match(/[٠-٩\d]+\s*غرف/)) {
-            // Make sure "غرفة" is not part of a size pattern (e.g., "مساحة اقل من ٨٠")
-            // Check if there's a size pattern before "غرفة" that might have matched the number
-            const roomIndex = query.indexOf('غرفة');
-            if (roomIndex > 0) {
-              const beforeRoom = query.substring(Math.max(0, roomIndex - 30), roomIndex);
-              // Only skip if there's a size number immediately before "غرفة"
-              if (!beforeRoom.match(/مساحة.*[٠-٩\d]+\s*$/)) {
                 bedroomCount = 1;
+                break;
               }
-            } else {
-              bedroomCount = 1;
+            } else if (query.includes('ثلاث غرف') || query.includes('ثلاثة غرف')) {
+              bedroomCount = 3;
+              break;
+            } else if (query.includes('أربع غرف') || query.includes('أربعة غرف') || query.includes('اربع غرف') || query.includes('اربع غرف') || query.match(/اربع\s*ة?\s*غرف/)) {
+              bedroomCount = 4;
+              break;
+            } else if (query.includes('خمس غرف') || query.includes('خمسة غرف')) {
+              bedroomCount = 5;
+              break;
+            } else if (query.includes('ست غرف') || query.includes('ستة غرف')) {
+              bedroomCount = 6;
+              break;
+            } else if (query.includes('سبع غرف') || query.includes('سبعة غرف')) {
+              bedroomCount = 7;
+              break;
+            } else if (query.includes('ثمان غرف') || query.includes('ثمانية غرف')) {
+              bedroomCount = 8;
+              break;
+            } else if (query.includes('تسع غرف') || query.includes('تسعة غرف')) {
+              bedroomCount = 9;
+              break;
+            } else if (query.includes('عشر غرف') || query.includes('عشرة غرف')) {
+              bedroomCount = 10;
+              break;
             }
-          } else if (query.includes('ثلاث غرف') || query.includes('ثلاثة غرف')) {
-            bedroomCount = 3;
-          } else if (query.includes('أربع غرف') || query.includes('أربعة غرف') || query.includes('اربع غرف') || query.includes('اربع غرف') || query.match(/اربع\s*ة?\s*غرف/)) {
-            bedroomCount = 4;
-          } else if (query.includes('خمس غرف') || query.includes('خمسة غرف')) {
-            bedroomCount = 5;
-          } else if (query.includes('ست غرف') || query.includes('ستة غرف')) {
-            bedroomCount = 6;
-          } else if (query.includes('سبع غرف') || query.includes('سبعة غرف')) {
-            bedroomCount = 7;
-          } else if (query.includes('ثمان غرف') || query.includes('ثمانية غرف')) {
-            bedroomCount = 8;
-          } else if (query.includes('تسع غرف') || query.includes('تسعة غرف')) {
-            bedroomCount = 9;
-          } else if (query.includes('عشر غرف') || query.includes('عشرة غرف')) {
-            bedroomCount = 10;
           }
-          
-          // If salon is mentioned, add 1 room to the count
-          if (bedroomCount !== null) {
-            if (hasSalon) {
-              extractedParams.bedrooms = bedroomCount + 1;
-              logger.info(`✅ Found ${bedroomCount} rooms + salon = ${bedroomCount + 1} total rooms`);
-            } else {
-              extractedParams.bedrooms = bedroomCount;
-            }
-            break;
-          }
+        }
+      }
+      
+      // If salon is mentioned, add 1 room to the count
+      if (bedroomCount !== null) {
+        if (hasSalon) {
+          extractedParams.bedrooms = bedroomCount + 1;
+          logger.info(`✅ Found ${bedroomCount} rooms + salon = ${bedroomCount + 1} total rooms`);
+        } else {
+          extractedParams.bedrooms = bedroomCount;
         }
       }
       
