@@ -213,6 +213,7 @@ const createListing = async (req, res, next) => {
       bedrooms: toNumber(bedrooms),
       bathrooms: toNumber(bathrooms),
       size: toNumber(size),
+      sizeUnit: req.body.sizeUnit || 'sqm', // Unit of measurement: sqm, dunam, sqft, sqyd
       landArea: landArea ? toNumber(landArea) : toNumber(size), // Default to size if not provided
       furnished: toBoolean(furnished),
       garages: toBoolean(garages),
@@ -535,6 +536,18 @@ const updateListing = async (req, res, next) => {
     }
     
     logger.info(`📋 Update Listing - Final approvalStatus to save: ${updateData.approvalStatus}`);
+    
+    // Handle contact information fields (agentEmail, agentNumber, agentWhatsapp)
+    // These can be updated by admin, and can be null to clear the value
+    if (updateData.agentEmail !== undefined) {
+      updateData.agentEmail = updateData.agentEmail ? String(updateData.agentEmail).trim() : null;
+    }
+    if (updateData.agentNumber !== undefined) {
+      updateData.agentNumber = updateData.agentNumber ? String(updateData.agentNumber).trim() : null;
+    }
+    if (updateData.agentWhatsapp !== undefined) {
+      updateData.agentWhatsapp = updateData.agentWhatsapp ? String(updateData.agentWhatsapp).trim() : null;
+    }
 
     const updatedListing = await Listing.findByIdAndUpdate(
       req.params.id,
