@@ -108,7 +108,7 @@ const createListing = async (req, res, next) => {
     // Validate required fields
     const requiredFields = {
       propertyType,
-      propertyKeyword,
+      // propertyKeyword is optional - removed from required fields
       propertyDesc,
       propertyPrice,
       status,
@@ -203,7 +203,7 @@ const createListing = async (req, res, next) => {
     const listingData = {
       propertyId: propertyId || `PROP_${Date.now()}`,
       propertyType: String(propertyType),
-      propertyKeyword: String(propertyKeyword),
+      propertyKeyword: propertyKeyword ? String(propertyKeyword) : undefined, // Optional field
       propertyDesc: String(propertyDesc),
       description_ar: req.body.description_ar ? String(req.body.description_ar) : undefined,
       propertyPrice: exactPrice, // CRITICAL: Store exact price - NO DEDUCTION, NO MODIFICATION, NO FEES

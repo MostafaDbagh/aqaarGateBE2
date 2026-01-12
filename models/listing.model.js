@@ -3,7 +3,7 @@ const listingSchema = new mongoose.Schema(
   {
     propertyId: { type: String, unique: true },  
     propertyType: { type: String, required: true },           
-    propertyKeyword: { type: String, required: true },
+    propertyKeyword: { type: String, required: false },
     propertyDesc: { type: String, required: true },
     description: { type: String }, // Alternative field name
     description_ar: { type: String }, // Arabic description
