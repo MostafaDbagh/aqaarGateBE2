@@ -30,10 +30,10 @@ const listingSchema = new mongoose.Schema(
     landArea: { type: Number },
     sizeUnit: { 
       type: String, 
-      enum: ['sqm', 'dunam', 'sqft', 'sqyd'], 
+      enum: ['sqm', 'dunam', 'sqft', 'sqyd', 'feddan'], 
       default: 'sqm',
       required: false 
-    }, // Unit of measurement: sqm (متر مربع), dunam (دونم), sqft (قدم مربع), sqyd (ياردة مربعة)                       
+    }, // Unit of measurement: sqm (متر مربع), dunam (دونم), sqft (قدم مربع), sqyd (ياردة مربعة), feddan (فدان)                       
     furnished: { type: Boolean, required: true },
     garages: { type: Boolean, required: true },
     garageSize: { type: Number },

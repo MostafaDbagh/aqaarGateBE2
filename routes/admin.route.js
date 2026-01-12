@@ -4,6 +4,7 @@ const adminAuth = require('../middleware/adminAuth');
 const {
   // Properties
   getAllProperties,
+  getPropertiesByAdmin,
   updatePropertyApproval,
   deleteProperty,
   getSoldProperties,
@@ -34,6 +35,7 @@ router.get('/dashboard/stats', getDashboardStats);
 
 // Properties
 router.get('/properties', getAllProperties);
+router.get('/properties-by-admin', getPropertiesByAdmin);
 router.put('/properties/:id/approval', updatePropertyApproval);
 router.delete('/properties/:id', deleteProperty);
 

@@ -78,6 +78,83 @@ const getAllProperties = async (req, res, next) => {
   }
 };
 
+// Get properties added by admin
+const getPropertiesByAdmin = async (req, res, next) => {
+  try {
+    const {
+      status,
+      approvalStatus,
+      propertyType,
+      city,
+      search,
+      page = 1,
+      limit = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Build query - only listings added by admin (agentId is null or agent is admin)
+    const query = { 
+      isDeleted: { $ne: true },
+      $or: [
+        { agentId: null },
+        { agent: 'admin@aqaargate.com' },
+        { agentEmail: 'admin@aqaargate.com' }
+      ]
+    };
+    
+    if (status) query.status = status;
+    if (approvalStatus) query.approvalStatus = approvalStatus;
+    if (propertyType) query.propertyType = propertyType;
+    if (city) query.city = new RegExp(city, 'i');
+    
+    if (search) {
+      query.$and = [
+        {
+          $or: [
+            { propertyKeyword: new RegExp(search, 'i') },
+            { address: new RegExp(search, 'i') },
+            { city: new RegExp(search, 'i') },
+            { propertyDesc: new RegExp(search, 'i') }
+          ]
+        }
+      ];
+    }
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Execute query
+    const [properties, total] = await Promise.all([
+      Listing.find(query)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Listing.countDocuments(query)
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: properties,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    logger.error('[ADMIN_GET_PROPERTIES_BY_ADMIN_ERROR]', {
+      error: error.message,
+      stack: error.stack
+    });
+    next(error);
+  }
+};
+
 // Approve/Reject property
 const updatePropertyApproval = async (req, res, next) => {
   try {
@@ -957,6 +1034,7 @@ const unblockAgent = async (req, res, next) => {
 module.exports = {
   // Properties
   getAllProperties,
+  getPropertiesByAdmin,
   updatePropertyApproval,
   deleteProperty,
   getSoldProperties,
