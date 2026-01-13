@@ -6,7 +6,34 @@ const logger = require('../utils/logger');
 const { sendOtpEmail } = require('../utils/email');
 
 const signup = async (req, res, next) => {
-  const { username, email, password, role, phone, whatsapp, company, job } = req.body;
+  const { 
+    username, 
+    username_ar,
+    email, 
+    password, 
+    role, 
+    phone, 
+    whatsapp, 
+    company, 
+    company_ar,
+    job, 
+    job_ar,
+    agentName,
+    description,
+    description_ar,
+    position,
+    position_ar,
+    officeNumber,
+    officeAddress,
+    officeAddress_ar,
+    location,
+    location_ar,
+    city,
+    facebook,
+    instagram,
+    linkedin,
+    avatar
+  } = req.body;
   const hashedPassword = bcryptjs.hashSync(password, 10);
   
   // Validate admin requirements
@@ -17,6 +44,16 @@ const signup = async (req, res, next) => {
     if (!whatsapp || whatsapp.trim().length === 0) {
       return next(errorHandler(400, 'WhatsApp number is required for admin users'));
     }
+    if (!agentName || agentName.trim().length === 0) {
+      return next(errorHandler(400, 'Agent name is required for admin users'));
+    }
+  }
+  
+  // Validate agent requirements
+  if (role === 'agent') {
+    if (!agentName || agentName.trim().length === 0) {
+      return next(errorHandler(400, 'Agent name is required for agent users'));
+    }
   }
   
   // Build user object with optional agent fields
@@ -25,22 +62,53 @@ const signup = async (req, res, next) => {
     email, 
     password: hashedPassword, 
     role,
-    isTrial: true, // New users get trial period
-    hasUnlimitedPoints: false // Default to false, can be set to true later
+    isTrial: role === 'admin' ? false : true, // Admins don't need trial
+    hasUnlimitedPoints: role === 'admin' ? true : false // Admins get unlimited points
   };
+  
+  // Add optional fields that may be provided
+  if (username_ar) userData.username_ar = username_ar.trim();
+  if (description) userData.description = description.trim();
+  if (description_ar) userData.description_ar = description_ar.trim();
+  if (location) userData.location = location.trim();
+  if (location_ar) userData.location_ar = location_ar.trim();
+  if (city) userData.city = city.trim();
+  if (facebook) userData.facebook = facebook.trim();
+  if (instagram) userData.instagram = instagram.trim();
+  if (linkedin) userData.linkedin = linkedin.trim();
+  if (avatar) userData.avatar = avatar.trim();
   
   // Add admin-specific fields if role is admin
   if (role === 'admin') {
-    userData.phone = phone;
-    userData.whatsapp = whatsapp;
+    userData.phone = phone.trim();
+    userData.whatsapp = whatsapp.trim();
+    userData.agentName = agentName.trim();
+    if (company) userData.company = company.trim();
+    if (company_ar) userData.company_ar = company_ar.trim();
+    if (position) userData.position = position.trim();
+    if (position_ar) userData.position_ar = position_ar.trim();
+    if (officeNumber) userData.officeNumber = officeNumber.trim();
+    if (officeAddress) userData.officeAddress = officeAddress.trim();
+    if (officeAddress_ar) userData.officeAddress_ar = officeAddress_ar.trim();
+    if (job) userData.job = job.trim();
+    if (job_ar) userData.job_ar = job_ar.trim();
+    userData.isBlocked = false; // Admins are not blocked
   }
   
   // Add agent-specific fields if role is agent
   if (role === 'agent') {
-    if (phone) userData.phone = phone;
-    if (whatsapp) userData.whatsapp = whatsapp;
-    if (company) userData.company = company;
-    if (job) userData.job = job;
+    userData.agentName = agentName.trim();
+    if (phone) userData.phone = phone.trim();
+    if (whatsapp) userData.whatsapp = whatsapp.trim();
+    if (company) userData.company = company.trim();
+    if (company_ar) userData.company_ar = company_ar.trim();
+    if (job) userData.job = job.trim();
+    if (job_ar) userData.job_ar = job_ar.trim();
+    if (position) userData.position = position.trim();
+    if (position_ar) userData.position_ar = position_ar.trim();
+    if (officeNumber) userData.officeNumber = officeNumber.trim();
+    if (officeAddress) userData.officeAddress = officeAddress.trim();
+    if (officeAddress_ar) userData.officeAddress_ar = officeAddress_ar.trim();
     // Set new agents as blocked by default until admin verification
     userData.isBlocked = true;
     userData.blockedReason = 'Pending admin verification';

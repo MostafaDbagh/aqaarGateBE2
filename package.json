@@ -10,7 +10,6 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:i18n": "node test-i18n.js",
     "deploy": "npm run start",
     "sync:agents": "node scripts/syncAgents.js",
     "sync:agents:prod-to-local": "node scripts/syncAgents.js --from-production --to-local",
@@ -20,8 +19,6 @@
     "clear:prod": "NODE_ENV=production node scripts/clearProductionDatabase.js",
     "clear:cache": "node scripts/clearAllCache.js",
     "reset:db": "node scripts/resetDatabaseKeepAdmin.js",
-    "check:db": "node scripts/checkDatabaseStatus.js",
-    "verify:db": "node scripts/verifyDatabase.js",
     "create:admin": "node scripts/create-admin-main.js",
     "create:admin:dev": "node scripts/create-admin-dev.js"
   },

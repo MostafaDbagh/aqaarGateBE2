@@ -7,6 +7,22 @@ const userSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    agentName: {
+      type: String,
+      required: function() {
+        return this.role === 'admin' || this.role === 'agent';
+      },
+      validate: {
+        validator: function(value) {
+          // If role is admin or agent, agentName must be provided and not empty
+          if (this.role === 'admin' || this.role === 'agent') {
+            return value && value.trim().length > 0;
+          }
+          return true; // For regular users, agentName is optional
+        },
+        message: 'Agent name is required for admin and agent users'
+      }
+    },
     username_ar: {
       type: String,
       default: '',

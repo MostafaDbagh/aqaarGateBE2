@@ -93,32 +93,113 @@ const getPropertiesByAdmin = async (req, res, next) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Build query - only listings added by admin (agentId is null or agent is admin)
-    const query = { 
-      isDeleted: { $ne: true },
-      $or: [
-        { agentId: null },
-        { agent: 'admin@aqaargate.com' },
-        { agentEmail: 'admin@aqaargate.com' }
-      ]
-    };
+    // First, get all admin user IDs
+    const adminUsers = await User.find({ role: 'admin' }).select('_id email username').lean();
+    const adminIds = adminUsers.map(admin => admin._id);
+    const adminEmails = adminUsers.map(admin => admin.email?.toLowerCase()).filter(Boolean);
+    const adminUsernames = adminUsers.map(admin => admin.username?.toLowerCase()).filter(Boolean);
     
-    if (status) query.status = status;
-    if (approvalStatus) query.approvalStatus = approvalStatus;
-    if (propertyType) query.propertyType = propertyType;
-    if (city) query.city = new RegExp(city, 'i');
+    // Also include common admin email patterns
+    adminEmails.push('admin@aqaargate.com');
+
+    // Build admin filter - only listings added by admin
+    // Check if agentId belongs to an admin user, or if agentEmail matches admin emails
+    const adminFilterConditions = [
+      { agentId: { $in: adminIds } } // agentId is an admin user ID (ObjectId)
+    ];
     
-    if (search) {
-      query.$and = [
-        {
-          $or: [
-            { propertyKeyword: new RegExp(search, 'i') },
-            { address: new RegExp(search, 'i') },
-            { city: new RegExp(search, 'i') },
-            { propertyDesc: new RegExp(search, 'i') }
+    // Add email-based filters
+    adminEmails.forEach(email => {
+      adminFilterConditions.push({ agentEmail: new RegExp(email, 'i') });
+      adminFilterConditions.push({ agent: new RegExp(email, 'i') });
+    });
+    
+    // Also check if agent field matches admin usernames (in case agent is stored as username)
+    adminUsernames.forEach(username => {
+      adminFilterConditions.push({ agent: new RegExp(username, 'i') });
+    });
+    
+    // Also check if agentId matches admin IDs as strings (handle case where agentId might be stored as string)
+    // We'll use $expr to compare string versions
+    if (adminIds.length > 0) {
+      adminFilterConditions.push({
+        $expr: {
+          $in: [
+            { $toString: '$agentId' },
+            adminIds.map(id => id.toString())
           ]
         }
-      ];
+      });
+    }
+    
+    // Log for debugging
+    logger.info('[ADMIN_GET_PROPERTIES_BY_ADMIN]', {
+      adminCount: adminUsers.length,
+      adminIds: adminIds.map(id => id.toString()),
+      adminEmails: adminEmails,
+      adminUsernames: adminUsernames,
+      filterConditionsCount: adminFilterConditions.length
+    });
+
+    // Build main query with admin filter
+    const baseQuery = { 
+      isDeleted: { $ne: true },
+      $or: adminFilterConditions
+    };
+    
+    // Build additional filters
+    const additionalFilters = {};
+    
+    // Add status filter
+    if (status) {
+      // Normalize status: 'for sale' -> 'sale', 'for rent' -> 'rent'
+      const normalizedStatus = status.toLowerCase() === 'for sale' ? 'sale' : 
+                               status.toLowerCase() === 'for rent' ? 'rent' : 
+                               status.toLowerCase();
+      additionalFilters.status = normalizedStatus;
+    }
+    
+    // Add approval status filter
+    if (approvalStatus) {
+      additionalFilters.approvalStatus = approvalStatus.toLowerCase();
+    }
+    
+    // Add property type filter
+    if (propertyType) {
+      additionalFilters.propertyType = propertyType;
+    }
+    
+    // Add city filter
+    if (city) {
+      additionalFilters.city = new RegExp(city, 'i');
+    }
+    
+    // Build final query - combine with admin filter using $and
+    let finalQuery;
+    if (search) {
+      const searchQuery = {
+        $or: [
+          { propertyKeyword: new RegExp(search, 'i') },
+          { address: new RegExp(search, 'i') },
+          { city: new RegExp(search, 'i') },
+          { propertyDesc: new RegExp(search, 'i') }
+        ]
+      };
+      
+      // Combine all filters using $and
+      finalQuery = {
+        $and: [
+          baseQuery,
+          additionalFilters,
+          searchQuery
+        ]
+      };
+    } else {
+      // No search - combine base query with additional filters
+      finalQuery = {
+        ...baseQuery,
+        ...additionalFilters
+      };
     }
 
     // Calculate pagination
@@ -126,15 +207,32 @@ const getPropertiesByAdmin = async (req, res, next) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
+    // Log the final query for debugging
+    logger.debug('[ADMIN_GET_PROPERTIES_BY_ADMIN_QUERY]', {
+      query: JSON.stringify(finalQuery, null, 2),
+      adminCount: adminUsers.length,
+      adminIds: adminIds.map(id => id.toString())
+    });
+
     // Execute query
     const [properties, total] = await Promise.all([
-      Listing.find(query)
+      Listing.find(finalQuery)
         .sort(sortOptions)
         .skip(skip)
         .limit(parseInt(limit))
+        .populate('agentId', 'username email role isBlocked blockedReason')
         .lean(),
-      Listing.countDocuments(query)
+      Listing.countDocuments(finalQuery)
     ]);
+
+    // Log query results for debugging
+    logger.info('[ADMIN_GET_PROPERTIES_BY_ADMIN_RESULTS]', {
+      queryConditions: adminFilterConditions.length,
+      totalFound: total,
+      returned: properties.length,
+      page: parseInt(page),
+      limit: parseInt(limit)
+    });
 
     res.status(200).json({
       success: true,

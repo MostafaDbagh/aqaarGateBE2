@@ -89,6 +89,7 @@ const createListing = async (req, res, next) => {
       neighborhood,
       agent,
       agentId,
+      agentName,
       agentEmail,
       agentNumber,
       agentWhatsapp,
@@ -230,6 +231,7 @@ const createListing = async (req, res, next) => {
       neighborhood_ar: req.body.neighborhood_ar ? String(req.body.neighborhood_ar) : undefined,
       agent: String(agent), // Required legacy field
       agentId: agentId ? (mongoose.Types.ObjectId.isValid(agentId) ? new mongoose.Types.ObjectId(agentId) : null) : null,
+      agentName: agentName ? String(agentName).trim() : undefined, // Agent name as string
       agentEmail: agentEmail ? String(agentEmail) : undefined,
       agentNumber: agentNumber ? String(agentNumber) : undefined,
       agentWhatsapp: agentWhatsapp ? String(agentWhatsapp) : undefined,
@@ -537,8 +539,11 @@ const updateListing = async (req, res, next) => {
     
     logger.info(`📋 Update Listing - Final approvalStatus to save: ${updateData.approvalStatus}`);
     
-    // Handle contact information fields (agentEmail, agentNumber, agentWhatsapp)
+    // Handle contact information fields (agentName, agentEmail, agentNumber, agentWhatsapp)
     // These can be updated by admin, and can be null to clear the value
+    if (updateData.agentName !== undefined) {
+      updateData.agentName = updateData.agentName ? String(updateData.agentName).trim() : null;
+    }
     if (updateData.agentEmail !== undefined) {
       updateData.agentEmail = updateData.agentEmail ? String(updateData.agentEmail).trim() : null;
     }
