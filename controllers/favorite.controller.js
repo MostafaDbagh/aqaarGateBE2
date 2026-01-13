@@ -3,6 +3,7 @@ const Listing = require('../models/listing.model');
 const Favorite = require('../models/favorite.model')
 const errorHandler = require('../utils/error');
 const jwt = require('jsonwebtoken');
+const getJWTSecret = require('../utils/jwtSecret');
 
 // Helper function to get user ID from token
 const getUserIdFromToken = (req) => {
@@ -10,7 +11,8 @@ const getUserIdFromToken = (req) => {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || '5345jkj5kl34j5kl34j5');
+      const jwtSecret = getJWTSecret();
+      const decoded = jwt.verify(token, jwtSecret);
       return decoded.id;
     } catch (error) {
       return null;

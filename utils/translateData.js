@@ -4,6 +4,8 @@
  * This utility translates data values in API responses based on the language
  */
 
+const logger = require('./logger');
+
 /**
  * Translate a listing object
  * @param {Object} listing - Listing object from database
@@ -210,7 +212,7 @@ function translateCity(city, t) {
       translated.displayName = translatedCityName;
     } else {
       // Log for debugging if translation not found
-      console.log(`[translateCity] No translation found for city: "${translated.city}", tried keys: ${translationKeys.join(', ')}`);
+      logger.debug(`[translateCity] No translation found for city: "${translated.city}", tried keys: ${translationKeys.join(', ')}`);
     }
   }
 

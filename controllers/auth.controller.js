@@ -4,6 +4,7 @@ const errorHandler = require('../utils/error.js');
 const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
 const { sendOtpEmail } = require('../utils/email');
+const getJWTSecret = require('../utils/jwtSecret');
 
 const signup = async (req, res, next) => {
   const { 
@@ -155,7 +156,15 @@ const signin = async (req, res, next) => {
     if (!validUser) return next(errorHandler(404, 'User not found!'));
     const validPassword = bcryptjs.compareSync(password, validUser.password);
     if (!validPassword) return next(errorHandler(401, 'Wrong credentials!'));
-    const token = jwt.sign({ id: validUser._id }, process.env.JWT_SECRET || '5345jkj5kl34j5kl34j5');
+    
+    let jwtSecret;
+    try {
+      jwtSecret = getJWTSecret();
+    } catch (error) {
+      return next(errorHandler(500, 'Server configuration error: ' + error.message));
+    }
+    
+    const token = jwt.sign({ id: validUser._id }, jwtSecret);
     const { password: pass, ...rest } = validUser._doc;
     res
       .cookie('access_token', token, { httpOnly: true })
@@ -175,7 +184,14 @@ const google = async (req, res, next) => {
   try {
     const user = await User.findOne({ email: req.body.email });
     if (user) {
-      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+      let jwtSecret;
+      try {
+        jwtSecret = getJWTSecret();
+      } catch (error) {
+        return next(errorHandler(500, 'Server configuration error: ' + error.message));
+      }
+      
+      const token = jwt.sign({ id: user._id }, jwtSecret);
       const { password: pass, ...rest } = user._doc;
       res
         .cookie('access_token', token, { httpOnly: true })
@@ -200,7 +216,15 @@ const google = async (req, res, next) => {
         avatar: req.body.photo,
       });
       await newUser.save();
-      const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET);
+      
+      let jwtSecret;
+      try {
+        jwtSecret = getJWTSecret();
+      } catch (error) {
+        return next(errorHandler(500, 'Server configuration error: ' + error.message));
+      }
+      
+      const token = jwt.sign({ id: newUser._id }, jwtSecret);
       const { password: pass, ...rest } = newUser._doc;
       res
         .cookie('access_token', token, { httpOnly: true })

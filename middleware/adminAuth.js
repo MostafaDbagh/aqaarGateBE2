@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
 const errorHandler = require('../utils/error');
+const getJWTSecret = require('../utils/jwtSecret');
 
 const adminAuth = async (req, res, next) => {
   try {
@@ -12,7 +13,14 @@ const adminAuth = async (req, res, next) => {
       return next(errorHandler(401, 'Unauthorized - No token provided'));
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || '5345jkj5kl34j5kl34j5');
+    let jwtSecret;
+    try {
+      jwtSecret = getJWTSecret();
+    } catch (error) {
+      return next(errorHandler(500, 'Server configuration error: ' + error.message));
+    }
+
+    const decoded = jwt.verify(token, jwtSecret);
     const user = await User.findById(decoded.id);
 
     if (!user) {

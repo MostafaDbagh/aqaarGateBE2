@@ -80,18 +80,18 @@ if (isDevelopment && databaseName === 'SyProperties' && !databaseName.includes('
 }
 
 // Log connection info (ALWAYS visible, not just in development)
-console.log('\n═══════════════════════════════════════════════════════');
-console.log('🔌 MongoDB Connection Information');
-console.log('═══════════════════════════════════════════════════════');
-console.log(`📊 Environment: ${NODE_ENV}`);
-console.log(`💾 Database Name: ${databaseName}`);
+logger.info('\n═══════════════════════════════════════════════════════');
+logger.info('🔌 MongoDB Connection Information');
+logger.info('═══════════════════════════════════════════════════════');
+logger.info(`📊 Environment: ${NODE_ENV}`);
+logger.info(`💾 Database Name: ${databaseName}`);
 if (isDevelopment) {
-  console.log('🛡️  Development mode - using separate database for safety');
-  console.log('✅ Your production database is PROTECTED');
+  logger.info('🛡️  Development mode - using separate database for safety');
+  logger.info('✅ Your production database is PROTECTED');
 } else {
-  console.log('⚠️  PRODUCTION mode - using production database');
+  logger.warn('⚠️  PRODUCTION mode - using production database');
 }
-console.log('═══════════════════════════════════════════════════════\n');
+logger.info('═══════════════════════════════════════════════════════\n');
 
 // Connection options (removed deprecated useNewUrlParser and useUnifiedTopology)
 const connectOptions = {
@@ -112,9 +112,9 @@ mongoose.set('bufferCommands', true); // Enable command buffering
 // Create connection promise
 const connectionPromise = mongoose.connect(mongoURI, connectOptions)
   .then(() => {
-    console.log(`✅ MongoDB connected successfully to database: ${databaseName}`);
+    logger.success(`MongoDB connected successfully to database: ${databaseName}`);
     if (isDevelopment) {
-      console.log('✅ Your production database is PROTECTED - all changes go to development DB');
+      logger.info('✅ Your production database is PROTECTED - all changes go to development DB');
     }
     return mongoose.connection;
   })

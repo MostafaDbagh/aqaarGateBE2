@@ -2,6 +2,7 @@ const bcryptjs = require('bcryptjs');
 const User = require('../models/user.model.js');
 const errorHandler = require('../utils/error.js');
 const  Listing = require( '../models/listing.model.js');
+const logger = require('../utils/logger');
 
 const test = (req, res) => {
   res.json({
@@ -145,7 +146,7 @@ const deleteUser = async (req, res, next) => {
           { agent: user.email }
         ]
       });
-      console.log(`Deleted ${deleteResult.deletedCount} listings for agent ${userEmail} (${userId})`);
+      logger.info(`Deleted ${deleteResult.deletedCount} listings for agent ${userEmail} (${userId})`);
     }
 
     // Permanently delete the user account from database
@@ -155,14 +156,14 @@ const deleteUser = async (req, res, next) => {
     // Clear the access token cookie
     res.clearCookie('access_token');
     
-    console.log(`User account deleted: ${userEmail} (${userId}), Role: ${userRole}`);
+    logger.info(`User account deleted: ${userEmail} (${userId}), Role: ${userRole}`);
     
     res.status(200).json({
       success: true,
       message: 'User account has been permanently deleted!'
     });
   } catch (error) {
-    console.error('Error deleting user account:', error);
+    logger.error('Error deleting user account:', error);
     next(error);
   }
 };

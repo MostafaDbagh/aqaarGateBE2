@@ -183,9 +183,16 @@ const getReviewsByProperty = async (req, res) => {
           : req.cookies?.access_token;
         
         if (token && token !== 'null') {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET || '5345jkj5kl34j5kl34j5');
-          authenticatedUserId = decoded.id;
-          logger.debug('getReviewsByAgent - Authenticated user ID:', authenticatedUserId);
+          try {
+            const getJWTSecret = require('../utils/jwtSecret');
+            const jwtSecret = getJWTSecret();
+            const decoded = jwt.verify(token, jwtSecret);
+            authenticatedUserId = decoded.id;
+            logger.debug('getReviewsByAgent - Authenticated user ID:', authenticatedUserId);
+          } catch (jwtError) {
+            // Token invalid or missing - that's okay, we'll use mapping logic
+            logger.debug('getReviewsByAgent - Invalid JWT token');
+          }
         }
       } catch (err) {
         // Token invalid or missing - that's okay, we'll use mapping logic

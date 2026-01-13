@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken')
 const errorHandler = require('../utils/error')
+const getJWTSecret = require('../utils/jwtSecret')
 
  const verifyToken = (req, res, next) => {
 
@@ -13,7 +14,12 @@ const errorHandler = require('../utils/error')
     return next(errorHandler(401, 'Unauthorized - No token provided'));
   }
 
-  const jwtSecret = process.env.JWT_SECRET || "5345jkj5kl34j5kl34j5";
+  let jwtSecret;
+  try {
+    jwtSecret = getJWTSecret();
+  } catch (error) {
+    return next(errorHandler(500, 'Server configuration error: ' + error.message));
+  }
   
   jwt.verify(token, jwtSecret, (err, user) => {
     if (err) {

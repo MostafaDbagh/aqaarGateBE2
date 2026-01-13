@@ -94,7 +94,7 @@ const corsOptions = {
     }
     
     // Log blocked origin for debugging
-    console.warn(`[CORS] Blocked origin: ${normalizedOrigin}`);
+    logger.warn(`[CORS] Blocked origin: ${normalizedOrigin}`);
     callback(null, true); // Temporarily allow all origins - change to callback(new Error('Not allowed by CORS')) for strict mode
   },
   credentials: true, // Allow cookies and authorization headers
