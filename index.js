@@ -83,19 +83,22 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    // Allow production frontend URL if set
+    // Allow production frontend URL if set in whitelist
     if (allowedOriginsSet.has(normalizedOrigin)) {
       return callback(null, true);
     }
     
-    // In development, allow all origins
+    // In development, allow all origins (for testing)
     if (process.env.NODE_ENV !== 'production') {
       return callback(null, true);
     }
     
-    // Log blocked origin for debugging
-    logger.warn(`[CORS] Blocked origin: ${normalizedOrigin}`);
-    callback(null, true); // Temporarily allow all origins - change to callback(new Error('Not allowed by CORS')) for strict mode
+    // In production, reject unauthorized origins
+    // Log blocked origin for security monitoring
+    logger.warn(`[CORS] Blocked unauthorized origin in production: ${normalizedOrigin}`);
+    
+    // Reject unauthorized origins in production
+    return callback(new Error(`Not allowed by CORS. Origin ${normalizedOrigin} is not authorized.`));
   },
   credentials: true, // Allow cookies and authorization headers
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
