@@ -219,7 +219,7 @@ const createListing = async (req, res, next) => {
       furnished: toBoolean(furnished),
       garages: toBoolean(garages),
       garageSize: garages && garageSize ? toNumber(garageSize) : 0,
-      yearBuilt: (yearBuilt && yearBuilt.toString().trim() !== '') ? toNumber(yearBuilt) : undefined,
+      yearBuilt: (yearBuilt && yearBuilt !== 0 && yearBuilt !== '0' && yearBuilt.toString().trim() !== '') ? toNumber(yearBuilt) : null,
       floor: req.body.floor ? toNumber(req.body.floor) : undefined,
       amenities: toArray(amenities),
       address: String(address),
@@ -554,13 +554,13 @@ const updateListing = async (req, res, next) => {
       updateData.agentWhatsapp = updateData.agentWhatsapp ? String(updateData.agentWhatsapp).trim() : null;
     }
 
-    // Handle yearBuilt - convert empty string to undefined (MongoDB Number fields can't store empty strings)
+    // Handle yearBuilt - convert empty string or 0 to null (null means not provided)
     if (updateData.yearBuilt !== undefined) {
-      if (updateData.yearBuilt === '' || updateData.yearBuilt === null || (typeof updateData.yearBuilt === 'string' && updateData.yearBuilt.trim() === '')) {
-        updateData.yearBuilt = undefined;
+      if (updateData.yearBuilt === '' || updateData.yearBuilt === null || updateData.yearBuilt === 0 || updateData.yearBuilt === '0' || (typeof updateData.yearBuilt === 'string' && updateData.yearBuilt.trim() === '')) {
+        updateData.yearBuilt = null;
       } else {
         const yearNum = toNumber(updateData.yearBuilt);
-        updateData.yearBuilt = isNaN(yearNum) ? undefined : yearNum;
+        updateData.yearBuilt = (isNaN(yearNum) || yearNum === 0) ? null : yearNum;
       }
     }
 
