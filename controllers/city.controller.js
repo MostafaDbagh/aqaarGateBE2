@@ -100,16 +100,25 @@ const getCityStats = async (req, res, next) => {
       'aleppo': '/images/cities/aleppo.jpg',
       'damascus': '/images/cities/damascus.jpg',
       'daraa': '/images/cities/daraa.webp',
-      'deir ez-zor': '/images/cities/Deir ez-Zor.jpg',
-      'deir ez zor': '/images/cities/Deir ez-Zor.jpg',
-      'deir-ez-zor': '/images/cities/Deir ez-Zor.jpg',
-      'deirezzor': '/images/cities/Deir ez-Zor.jpg',
+      'deir ez-zor': '/images/cities/Deir ez-Zur.jpg',
+      'deir ez zor': '/images/cities/Deir ez-Zur.jpg',
+      'deir-ez-zor': '/images/cities/Deir ez-Zur.jpg',
+      'deirezzor': '/images/cities/Deir ez-Zur.jpg',
+      'deir ez-zur': '/images/cities/Deir ez-Zur.jpg', // Added for "Zur" spelling
+      'deir ez zur': '/images/cities/Deir ez-Zur.jpg', // Added for "Zur" spelling
+      'deir-ez-zur': '/images/cities/Deir ez-Zur.jpg', // Added for "Zur" spelling
+      'deirezzur': '/images/cities/Deir ez-Zur.jpg', // Added for "Zur" spelling
       'hama': '/images/cities/hama.jpg',
       'homs': '/images/cities/Homs.jpg',
       'idlib': '/images/cities/idlib.jpg',
       'latakia': '/images/cities/latakia.jpeg',
       'tartus': '/images/cities/tartous.jpg',
-      'tartous': '/images/cities/tartous.jpg'
+      'tartous': '/images/cities/tartous.jpg',
+      'as-suwayda': '/images/cities/SY.webp', // Add As-Suwayda (use SY.webp as fallback until image is added)
+      'as suwayda': '/images/cities/SY.webp',
+      'suwayda': '/images/cities/SY.webp',
+      'raqqah': '/images/cities/SY.webp', // Add Raqqah (use SY.webp as fallback until image is added)
+      'raqqa': '/images/cities/SY.webp'
     };
     
     // Helper function to normalize city name for matching
@@ -139,9 +148,9 @@ const getCityStats = async (req, res, next) => {
         });
       }
       
-      // Special handling for Deir ez-Zor variations
-      if (!imageKey && (cityLower.includes('deir') && cityLower.includes('zor'))) {
-        imageKey = 'deir ez-zor';
+      // Special handling for Deir ez-Zor/Zur variations
+      if (!imageKey && (cityLower.includes('deir') && (cityLower.includes('zor') || cityLower.includes('zur')))) {
+        imageKey = 'deir ez-zur'; // Use "zur" as it matches the actual file name
       }
       
       return {
