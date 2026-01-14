@@ -219,7 +219,7 @@ const createListing = async (req, res, next) => {
       furnished: toBoolean(furnished),
       garages: toBoolean(garages),
       garageSize: garages && garageSize ? toNumber(garageSize) : 0,
-      yearBuilt: yearBuilt ? toNumber(yearBuilt) : new Date().getFullYear(),
+      yearBuilt: (yearBuilt && yearBuilt.toString().trim() !== '') ? toNumber(yearBuilt) : undefined,
       floor: req.body.floor ? toNumber(req.body.floor) : undefined,
       amenities: toArray(amenities),
       address: String(address),
@@ -552,6 +552,16 @@ const updateListing = async (req, res, next) => {
     }
     if (updateData.agentWhatsapp !== undefined) {
       updateData.agentWhatsapp = updateData.agentWhatsapp ? String(updateData.agentWhatsapp).trim() : null;
+    }
+
+    // Handle yearBuilt - convert empty string to undefined (MongoDB Number fields can't store empty strings)
+    if (updateData.yearBuilt !== undefined) {
+      if (updateData.yearBuilt === '' || updateData.yearBuilt === null || (typeof updateData.yearBuilt === 'string' && updateData.yearBuilt.trim() === '')) {
+        updateData.yearBuilt = undefined;
+      } else {
+        const yearNum = toNumber(updateData.yearBuilt);
+        updateData.yearBuilt = isNaN(yearNum) ? undefined : yearNum;
+      }
     }
 
     const updatedListing = await Listing.findByIdAndUpdate(
