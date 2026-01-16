@@ -37,6 +37,10 @@ const signup = async (req, res, next) => {
   } = req.body;
   const hashedPassword = bcryptjs.hashSync(password, 10);
   
+  // For agents, use username as agentName if not provided (frontend doesn't collect agentName)
+  // Create a variable that can be reassigned
+  let finalAgentName = agentName;
+  
   // Validate admin requirements
   if (role === 'admin') {
     if (!phone || phone.trim().length === 0) {
@@ -45,7 +49,7 @@ const signup = async (req, res, next) => {
     if (!whatsapp || whatsapp.trim().length === 0) {
       return next(errorHandler(400, 'WhatsApp number is required for admin users'));
     }
-    if (!agentName || agentName.trim().length === 0) {
+    if (!finalAgentName || finalAgentName.trim().length === 0) {
       return next(errorHandler(400, 'Agent name is required for admin users'));
     }
   }
@@ -53,9 +57,9 @@ const signup = async (req, res, next) => {
   // Validate agent requirements
   // For agents, use username as agentName if not provided (frontend doesn't collect agentName)
   if (role === 'agent') {
-    if (!agentName || agentName.trim().length === 0) {
+    if (!finalAgentName || finalAgentName.trim().length === 0) {
       // Use username as default agentName for agents
-      agentName = username;
+      finalAgentName = username;
     }
   }
   
@@ -85,7 +89,7 @@ const signup = async (req, res, next) => {
   if (role === 'admin') {
     userData.phone = phone.trim();
     userData.whatsapp = whatsapp.trim();
-    userData.agentName = agentName.trim();
+    userData.agentName = finalAgentName.trim();
     if (company) userData.company = company.trim();
     if (company_ar) userData.company_ar = company_ar.trim();
     if (position) userData.position = position.trim();
@@ -101,7 +105,7 @@ const signup = async (req, res, next) => {
   // Add agent-specific fields if role is agent
   if (role === 'agent') {
     // Use username as agentName if not provided (already set above)
-    userData.agentName = (agentName || username).trim();
+    userData.agentName = finalAgentName.trim();
     if (phone) userData.phone = phone.trim();
     if (whatsapp) userData.whatsapp = whatsapp.trim();
     if (company) userData.company = company.trim();
