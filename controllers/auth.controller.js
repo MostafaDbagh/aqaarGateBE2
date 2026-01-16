@@ -338,7 +338,7 @@ const sendOTP = async (req, res, next) => {
     });
 
     // Send email in background (non-blocking) - don't await
-    // RESTORED TO ORIGINAL: Use SMTP directly (as it was working before)
+    // Use SMTP directly (removed Mailgun)
     const sendEmailWithRetry = async (retries = 2) => {
       // For localhost development - log OTP to console if email fails
       const isDevelopment = process.env.NODE_ENV !== 'production';
@@ -351,11 +351,13 @@ const sendOTP = async (req, res, next) => {
           type,
           hasSMTPConfig: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD),
           smtpHost: process.env.SMTP_HOST || 'not set',
+          smtpPort: process.env.SMTP_PORT || 'not set',
         });
       }
       
       for (let i = 0; i <= retries; i++) {
         try {
+          // Use SMTP directly
           await sendOtpEmail({
             to: normalizedEmail,
             otp,
@@ -369,7 +371,7 @@ const sendOTP = async (req, res, next) => {
             environment: process.env.NODE_ENV || 'development'
           });
           if (isDevelopment) {
-            console.log('✅ Email sent successfully to:', normalizedEmail);
+            console.log('✅ Email sent successfully via SMTP to:', normalizedEmail);
           }
           return; // Success, exit retry loop
         } catch (emailError) {

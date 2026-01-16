@@ -29,10 +29,19 @@ const buildTransporter = () => {
   } = process.env;
 
   const smtpHost = SMTP_HOST || FALLBACK_CONFIG.host;
-  const smtpPort = SMTP_PORT ? Number(SMTP_PORT) : FALLBACK_CONFIG.port;
-  const smtpSecure = SMTP_SECURE
+  // Try port 587 (TLS) for better compatibility on Render.com, fallback to 465 (SSL)
+  // Port 587 is more reliable on cloud platforms like Render.com
+  let smtpPort = SMTP_PORT ? Number(SMTP_PORT) : FALLBACK_CONFIG.port;
+  let smtpSecure = SMTP_SECURE
     ? SMTP_SECURE.toLowerCase() === 'true'
     : FALLBACK_CONFIG.secure;
+  
+  // For production on Render.com, prefer port 587 with TLS (more reliable) if port not explicitly set
+  if (process.env.NODE_ENV === 'production' && !SMTP_PORT) {
+    smtpPort = 587;
+    smtpSecure = false; // TLS (STARTTLS) instead of SSL
+  }
+  
   const smtpUser = SMTP_USER || SMTP_FROM_EMAIL || FALLBACK_CONFIG.user;
   const smtpPassword = SMTP_PASSWORD || FALLBACK_CONFIG.password;
   if (!smtpHost) {
@@ -59,6 +68,8 @@ const buildTransporter = () => {
       rejectUnauthorized: false,
       minVersion: 'TLSv1.2', // Use TLS 1.2 or higher (not SSLv3)
     },
+    // For port 587 (TLS/STARTTLS), we need to allow upgrading connection
+    requireTLS: smtpPort === 587,
     connectionTimeout: 30000, // 30 seconds connection timeout
     socketTimeout: 30000, // 30 seconds socket timeout
     greetingTimeout: 30000, // 30 seconds greeting timeout
@@ -121,13 +132,15 @@ const sendMail = async ({ to, subject, html, text }) => {
   };
 
   // Add timeout wrapper to prevent hanging
-  const EMAIL_TIMEOUT = 15000; // 15 seconds timeout for sending email
+  // Increased timeout for production (Render.com can be slow with SMTP)
+  const EMAIL_TIMEOUT = process.env.NODE_ENV === 'production' ? 30000 : 15000; // 30 seconds for production, 15 for dev
+  const timeoutSeconds = EMAIL_TIMEOUT / 1000; // Convert to seconds for error message
   
   try {
     return await Promise.race([
       mailTransporter.sendMail(mailOptions),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Email send timeout after 15 seconds')), EMAIL_TIMEOUT)
+        setTimeout(() => reject(new Error(`Email send timeout after ${timeoutSeconds} seconds`)), EMAIL_TIMEOUT)
       )
     ]);
   } catch (error) {
