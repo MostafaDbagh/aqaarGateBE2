@@ -135,6 +135,7 @@ const sendMail = async ({ to, subject, html, text }) => {
     const smtpHost = process.env.SMTP_HOST || FALLBACK_CONFIG.host;
     const smtpPort = process.env.SMTP_PORT || FALLBACK_CONFIG.port;
     const smtpUser = process.env.SMTP_USER || FALLBACK_CONFIG.user;
+    const smtpPassword = process.env.SMTP_PASSWORD || FALLBACK_CONFIG.password;
     
     // Enhanced error logging with more diagnostic info
     const errorDetails = {
