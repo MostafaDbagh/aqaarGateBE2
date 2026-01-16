@@ -337,8 +337,29 @@ const sendOTP = async (req, res, next) => {
     });
 
     // Send email in background (non-blocking) - don't await
-    // Add retry mechanism for better reliability
+    // PRIORITY ORDER (for Syria support):
+    // 1. Mailgun (works with Syria, good international delivery)
+    // 2. SMTP (Titan Email or other SMTP provider)
+    // 3. SendGrid (last resort only - does NOT support Syria)
     const sendEmailWithRetry = async (retries = 2) => {
+      // Try Mailgun FIRST (best for Syria and international delivery)
+      if (process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN) {
+        try {
+          const { sendOtpEmailMailgun } = require('../utils/email-mailgun');
+          await sendOtpEmailMailgun({ to: normalizedEmail, otp, type });
+          logger.error('[EMAIL_SUCCESS] Mailgun email sent successfully (PRIMARY)', { email: normalizedEmail, type });
+          return; // Mailgun succeeded
+        } catch (mailgunError) {
+          logger.error('Mailgun email failed, trying SMTP fallback:', {
+            email: normalizedEmail,
+            type,
+            error: mailgunError.message
+          });
+          // Fall through to SMTP fallback
+        }
+      }
+      
+      // SMTP as primary (if Mailgun not configured) or fallback
       for (let i = 0; i <= retries; i++) {
         try {
           await sendOtpEmail({
@@ -347,11 +368,11 @@ const sendOTP = async (req, res, next) => {
             type,
           });
           // Always log email success (not just in dev)
-          logger.error('[EMAIL_SUCCESS] OTP email sent successfully', { email: normalizedEmail, type, attempt: i + 1 });
+          logger.error('[EMAIL_SUCCESS] OTP email sent successfully via SMTP', { email: normalizedEmail, type, attempt: i + 1 });
           return; // Success, exit retry loop
         } catch (emailError) {
           const isLastAttempt = i === retries;
-          logger.error(`Failed to send OTP email (attempt ${i + 1}/${retries + 1})`, {
+          logger.error(`Failed to send OTP email via SMTP (attempt ${i + 1}/${retries + 1})`, {
             email: normalizedEmail,
             type,
             attempt: i + 1,
@@ -359,23 +380,23 @@ const sendOTP = async (req, res, next) => {
             stack: isLastAttempt ? emailError.stack : undefined // Only log stack on final attempt
           });
           
-          // Try SendGrid as fallback if SMTP fails (for restricted regions like Syria)
-          if (isLastAttempt && process.env.SENDGRID_API_KEY) {
-            try {
-              const { sendOtpEmailSendGrid } = require('../utils/email-sendgrid');
-              await sendOtpEmailSendGrid({ to: normalizedEmail, otp, type });
-              logger.error('[EMAIL_SUCCESS] SendGrid fallback email sent successfully', { email: normalizedEmail, type });
-              return; // SendGrid succeeded
-            } catch (sendGridError) {
-              logger.error('SendGrid fallback also failed:', {
-                email: normalizedEmail,
-                type,
-                error: sendGridError.message
-              });
-            }
-          }
-          
           if (isLastAttempt) {
+            // Try SendGrid as last resort (doesn't work for Syria, but might work for other countries)
+            if (process.env.SENDGRID_API_KEY) {
+              try {
+                const { sendOtpEmailSendGrid } = require('../utils/email-sendgrid');
+                await sendOtpEmailSendGrid({ to: normalizedEmail, otp, type });
+                logger.error('[EMAIL_SUCCESS] SendGrid email sent successfully (LAST RESORT)', { email: normalizedEmail, type });
+                return; // SendGrid succeeded
+              } catch (sendGridError) {
+                logger.error('SendGrid also failed:', {
+                  email: normalizedEmail,
+                  type,
+                  error: sendGridError.message
+                });
+              }
+            }
+            
             // All retries failed - but KEEP OTP in store for manual verification
             // Don't delete it so support can help users in restricted regions
             logger.error('OTP email failed after all retries - OTP kept in store for manual verification', {
