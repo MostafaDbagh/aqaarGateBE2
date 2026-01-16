@@ -342,6 +342,17 @@ const sendOTP = async (req, res, next) => {
     const sendEmailWithRetry = async (retries = 2) => {
       // For localhost development - log OTP to console if email fails
       const isDevelopment = process.env.NODE_ENV !== 'production';
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      // Log email attempt start (especially important for production debugging)
+      if (isProduction) {
+        logger.error('[PRODUCTION_EMAIL_ATTEMPT] Starting email send', {
+          email: normalizedEmail,
+          type,
+          hasSMTPConfig: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD),
+          smtpHost: process.env.SMTP_HOST || 'not set',
+        });
+      }
       
       for (let i = 0; i <= retries; i++) {
         try {
@@ -351,27 +362,52 @@ const sendOTP = async (req, res, next) => {
             type,
           });
           // Always log email success (not just in dev)
-          logger.error('[EMAIL_SUCCESS] OTP email sent successfully via SMTP', { email: normalizedEmail, type, attempt: i + 1 });
+          logger.error('[EMAIL_SUCCESS] OTP email sent successfully via SMTP', { 
+            email: normalizedEmail, 
+            type, 
+            attempt: i + 1,
+            environment: process.env.NODE_ENV || 'development'
+          });
           if (isDevelopment) {
             console.log('✅ Email sent successfully to:', normalizedEmail);
           }
           return; // Success, exit retry loop
         } catch (emailError) {
           const isLastAttempt = i === retries;
-          logger.error(`Failed to send OTP email via SMTP (attempt ${i + 1}/${retries + 1})`, {
+          
+          // Enhanced error logging for production
+          const errorLog = {
             email: normalizedEmail,
             type,
             attempt: i + 1,
+            totalRetries: retries + 1,
             error: emailError.message,
-            stack: isLastAttempt ? emailError.stack : undefined // Only log stack on final attempt
-          });
+            errorCode: emailError.code,
+            environment: process.env.NODE_ENV || 'development',
+            smtpHost: process.env.SMTP_HOST || 'not set',
+            smtpPort: process.env.SMTP_PORT || 'not set',
+            hasSMTPUser: !!process.env.SMTP_USER,
+            hasSMTPPassword: !!process.env.SMTP_PASSWORD,
+          };
+          
+          if (isLastAttempt) {
+            errorLog.stack = emailError.stack;
+            if (isProduction) {
+              logger.error('[PRODUCTION_EMAIL_ERROR] CRITICAL - All email attempts failed', errorLog);
+            } else {
+              logger.error(`Failed to send OTP email via SMTP (attempt ${i + 1}/${retries + 1})`, errorLog);
+            }
+          } else {
+            logger.error(`Failed to send OTP email via SMTP (attempt ${i + 1}/${retries + 1})`, errorLog);
+          }
           
           if (isLastAttempt) {
             // All retries failed - but KEEP OTP in store for manual verification
             logger.error('OTP email failed after all retries - OTP kept in store for manual verification', {
               email: normalizedEmail,
               type,
-              otp: isDevelopment ? otp : '***' // Only log OTP in dev
+              otp: isDevelopment ? otp : '***', // Only log OTP in dev
+              environment: process.env.NODE_ENV || 'development'
             });
             
             // For localhost: Log OTP to console so you can still test

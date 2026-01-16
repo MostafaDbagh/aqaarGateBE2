@@ -179,8 +179,10 @@ const categoryRoutes = require('./routes/category.route');
 const cityRoutes = require('./routes/city.route');
 const propertyRentalRoutes = require('./routes/propertyRental.route');
 const adminRoutes = require('./routes/admin.route');
+const diagnosticRoutes = require('./routes/diagnostic.route');
 
 app.use('/api/auth', authRouter);
+app.use('/api/diagnostic', diagnosticRoutes);
 app.use('/api/user', userRouter);
 // Apply i18n middleware only to public GET endpoints for guests
 app.use('/api/listing', i18nMiddleware, listingRouter);
