@@ -51,9 +51,11 @@ const signup = async (req, res, next) => {
   }
   
   // Validate agent requirements
+  // For agents, use username as agentName if not provided (frontend doesn't collect agentName)
   if (role === 'agent') {
     if (!agentName || agentName.trim().length === 0) {
-      return next(errorHandler(400, 'Agent name is required for agent users'));
+      // Use username as default agentName for agents
+      agentName = username;
     }
   }
   
@@ -98,7 +100,8 @@ const signup = async (req, res, next) => {
   
   // Add agent-specific fields if role is agent
   if (role === 'agent') {
-    userData.agentName = agentName.trim();
+    // Use username as agentName if not provided (already set above)
+    userData.agentName = (agentName || username).trim();
     if (phone) userData.phone = phone.trim();
     if (whatsapp) userData.whatsapp = whatsapp.trim();
     if (company) userData.company = company.trim();
