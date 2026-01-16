@@ -286,6 +286,7 @@ const sendOTP = async (req, res, next) => {
         error: 'INVALID_EMAIL_FORMAT'
       });
     }
+    
 
     // For forgot password, check if user exists
     if (type === 'forgot_password') {
@@ -337,41 +338,8 @@ const sendOTP = async (req, res, next) => {
     });
 
     // Send email in background (non-blocking) - don't await
-    // PRIORITY ORDER (for Syria support):
-    // 1. Mailgun (works with Syria, good international delivery) - ONLY if fully configured
-    // 2. SMTP (Titan Email or other SMTP provider) - PRIMARY if Mailgun not configured
-    // 3. SendGrid (last resort only - does NOT support Syria)
+    // RESTORED TO ORIGINAL: Use SMTP directly (as it was working before)
     const sendEmailWithRetry = async (retries = 2) => {
-      // Try Mailgun FIRST (only if BOTH API key and domain are configured)
-      const mailgunApiKey = process.env.MAILGUN_API_KEY?.trim();
-      const mailgunDomain = process.env.MAILGUN_DOMAIN?.trim();
-      const mailgunConfigured = mailgunApiKey && mailgunDomain && mailgunApiKey !== '' && mailgunDomain !== '';
-      
-      if (mailgunConfigured) {
-        try {
-          const { sendOtpEmailMailgun } = require('../utils/email-mailgun');
-          await sendOtpEmailMailgun({ to: normalizedEmail, otp, type });
-          logger.error('[EMAIL_SUCCESS] Mailgun email sent successfully (PRIMARY)', { email: normalizedEmail, type });
-          return; // Mailgun succeeded
-        } catch (mailgunError) {
-          // Log error but don't break - fall through to SMTP
-          logger.error('Mailgun email failed, trying SMTP fallback:', {
-            email: normalizedEmail,
-            type,
-            error: mailgunError.message,
-            stack: process.env.NODE_ENV !== 'production' ? mailgunError.stack : undefined
-          });
-          // Fall through to SMTP fallback - don't return, continue to SMTP
-        }
-      } else {
-        // Mailgun not configured - log and proceed to SMTP
-        logger.info('Mailgun not configured, using SMTP', { 
-          hasApiKey: !!mailgunApiKey, 
-          hasDomain: !!mailgunDomain 
-        });
-      }
-      
-      // SMTP as primary (if Mailgun not configured) or fallback (if Mailgun failed)
       for (let i = 0; i <= retries; i++) {
         try {
           await sendOtpEmail({
@@ -393,24 +361,7 @@ const sendOTP = async (req, res, next) => {
           });
           
           if (isLastAttempt) {
-            // Try SendGrid as last resort (doesn't work for Syria, but might work for other countries)
-            if (process.env.SENDGRID_API_KEY) {
-              try {
-                const { sendOtpEmailSendGrid } = require('../utils/email-sendgrid');
-                await sendOtpEmailSendGrid({ to: normalizedEmail, otp, type });
-                logger.error('[EMAIL_SUCCESS] SendGrid email sent successfully (LAST RESORT)', { email: normalizedEmail, type });
-                return; // SendGrid succeeded
-              } catch (sendGridError) {
-                logger.error('SendGrid also failed:', {
-                  email: normalizedEmail,
-                  type,
-                  error: sendGridError.message
-                });
-              }
-            }
-            
             // All retries failed - but KEEP OTP in store for manual verification
-            // Don't delete it so support can help users in restricted regions
             logger.error('OTP email failed after all retries - OTP kept in store for manual verification', {
               email: normalizedEmail,
               type,
