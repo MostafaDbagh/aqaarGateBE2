@@ -48,7 +48,14 @@ async function testEmailSending() {
     });
     console.log('✅ SMTP: SUCCESS - Email sent!\n');
   } catch (error) {
-    console.log(`❌ SMTP: FAILED - ${error.message}\n`);
+    console.log(`❌ SMTP: FAILED - ${error.message}`);
+    if (error.message.includes('handshake') || error.message.includes('SSL') || error.message.includes('TLS')) {
+      console.log('   💡 SSL/TLS handshake error - this might be a TLS version issue\n');
+    }
+    if (error.message.includes('smtpHost')) {
+      console.log('   💡 SMTP host configuration issue - check .env file\n');
+    }
+    console.log('');
   }
   
   // Test 3: SendGrid (if configured)

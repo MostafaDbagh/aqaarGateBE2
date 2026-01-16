@@ -340,6 +340,9 @@ const sendOTP = async (req, res, next) => {
     // Send email in background (non-blocking) - don't await
     // RESTORED TO ORIGINAL: Use SMTP directly (as it was working before)
     const sendEmailWithRetry = async (retries = 2) => {
+      // For localhost development - log OTP to console if email fails
+      const isDevelopment = process.env.NODE_ENV !== 'production';
+      
       for (let i = 0; i <= retries; i++) {
         try {
           await sendOtpEmail({
@@ -349,6 +352,9 @@ const sendOTP = async (req, res, next) => {
           });
           // Always log email success (not just in dev)
           logger.error('[EMAIL_SUCCESS] OTP email sent successfully via SMTP', { email: normalizedEmail, type, attempt: i + 1 });
+          if (isDevelopment) {
+            console.log('✅ Email sent successfully to:', normalizedEmail);
+          }
           return; // Success, exit retry loop
         } catch (emailError) {
           const isLastAttempt = i === retries;
@@ -365,8 +371,18 @@ const sendOTP = async (req, res, next) => {
             logger.error('OTP email failed after all retries - OTP kept in store for manual verification', {
               email: normalizedEmail,
               type,
-              otp: process.env.NODE_ENV !== 'production' ? otp : '***' // Only log OTP in dev
+              otp: isDevelopment ? otp : '***' // Only log OTP in dev
             });
+            
+            // For localhost: Log OTP to console so you can still test
+            if (isDevelopment) {
+              console.log('\n🔐 ============================================');
+              console.log('⚠️  EMAIL FAILED - OTP for testing:');
+              console.log(`📧 Email: ${normalizedEmail}`);
+              console.log(`🔑 OTP: ${otp}`);
+              console.log(`⏰ Expires in: 5 minutes`);
+              console.log('============================================\n');
+            }
           } else {
             // Wait before retry (exponential backoff: 1s, 2s)
             await new Promise(resolve => setTimeout(resolve, (i + 1) * 1000));

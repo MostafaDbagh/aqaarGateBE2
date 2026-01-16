@@ -57,10 +57,13 @@ const buildTransporter = () => {
     },
     tls: {
       rejectUnauthorized: false,
+      minVersion: 'TLSv1.2', // Use TLS 1.2 or higher (not SSLv3)
     },
-    connectionTimeout: 10000, // 10 seconds connection timeout
-    socketTimeout: 10000, // 10 seconds socket timeout
-    greetingTimeout: 10000, // 10 seconds greeting timeout
+    connectionTimeout: 30000, // 30 seconds connection timeout
+    socketTimeout: 30000, // 30 seconds socket timeout
+    greetingTimeout: 30000, // 30 seconds greeting timeout
+    debug: process.env.NODE_ENV !== 'production', // Enable debug in development
+    logger: process.env.NODE_ENV !== 'production', // Enable logger in development
   });
 
   transporter.verify((error, success) => {
@@ -69,13 +72,16 @@ const buildTransporter = () => {
         host: smtpHost,
         port: smtpPort,
         error: error.message,
-        code: error.code
+        code: error.code,
+        environment: process.env.NODE_ENV || 'development',
+        isLocalhost: process.env.NODE_ENV !== 'production'
       });
     } else if (success) {
       // Always log SMTP ready status
       logger.error('[SMTP_READY] SMTP server is ready to take messages', {
         host: smtpHost,
-        port: smtpPort
+        port: smtpPort,
+        environment: process.env.NODE_ENV || 'development'
       });
     }
   });
@@ -84,7 +90,16 @@ const buildTransporter = () => {
 };
 
 const sendMail = async ({ to, subject, html, text }) => {
-  const mailTransporter = buildTransporter();
+  let mailTransporter;
+  try {
+    mailTransporter = buildTransporter();
+  } catch (transporterError) {
+    logger.error('Failed to build SMTP transporter:', {
+      error: transporterError.message,
+      environment: process.env.NODE_ENV || 'development'
+    });
+    throw transporterError;
+  }
 
   const {
     SMTP_FROM_EMAIL,
@@ -116,6 +131,11 @@ const sendMail = async ({ to, subject, html, text }) => {
       )
     ]);
   } catch (error) {
+    // Get SMTP config for error details
+    const smtpHost = process.env.SMTP_HOST || FALLBACK_CONFIG.host;
+    const smtpPort = process.env.SMTP_PORT || FALLBACK_CONFIG.port;
+    const smtpUser = process.env.SMTP_USER || FALLBACK_CONFIG.user;
+    
     // Enhanced error logging with more diagnostic info
     const errorDetails = {
       to,
@@ -125,11 +145,30 @@ const sendMail = async ({ to, subject, html, text }) => {
       command: error.command,
       response: error.response,
       responseCode: error.responseCode,
+      environment: process.env.NODE_ENV || 'development',
+      isLocalhost: process.env.NODE_ENV !== 'production',
+      smtpHost: smtpHost || 'not set',
+      smtpPort: smtpPort || 'not set',
+      smtpUser: smtpUser ? `${smtpUser.substring(0, 3)}***` : 'not set',
     };
     
-    // Only include stack in development
-    if (process.env.NODE_ENV !== 'production') {
+    // Enhanced logging for production errors
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('[PRODUCTION_EMAIL_ERROR] Critical email failure in production:', {
+        to,
+        error: error.message,
+        errorCode: error.code,
+        responseCode: error.responseCode,
+        smtpHost,
+        smtpPort,
+        hasCredentials: !!(smtpUser && smtpPassword),
+      });
+    } else {
       errorDetails.stack = error.stack;
+      // Log OTP in development for debugging
+      if (subject.includes('OTP') || subject.includes('Verification')) {
+        logger.error('[LOCALHOST_DEBUG] OTP email failed - check SMTP connection', errorDetails);
+      }
     }
     
     logger.error('Error sending email:', errorDetails);
