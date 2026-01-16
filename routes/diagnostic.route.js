@@ -15,10 +15,9 @@ router.get('/email-config', (req, res) => {
       fromEmail: process.env.SMTP_FROM_EMAIL || 'not set',
       fromName: process.env.SMTP_FROM_NAME || 'not set',
     },
-    mailgun: {
-      apiKey: process.env.MAILGUN_API_KEY ? '***SET***' : 'NOT SET',
-      domain: process.env.MAILGUN_DOMAIN || 'not set',
-      fromEmail: process.env.MAILGUN_FROM_EMAIL || 'not set',
+    resend: {
+      apiKey: process.env.RESEND_API_KEY ? '***SET***' : 'NOT SET',
+      fromEmail: process.env.RESEND_FROM_EMAIL || 'not set',
     },
     sendgrid: {
       apiKey: process.env.SENDGRID_API_KEY ? '***SET***' : 'NOT SET',

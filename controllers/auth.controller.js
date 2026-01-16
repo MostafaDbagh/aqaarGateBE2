@@ -338,17 +338,21 @@ const sendOTP = async (req, res, next) => {
     });
 
     // Send email in background (non-blocking) - don't await
-    // Use SMTP directly (removed Mailgun)
+    // Try Resend first (HTTP API, no SMTP ports), then SMTP as fallback
     const sendEmailWithRetry = async (retries = 2) => {
       // For localhost development - log OTP to console if email fails
       const isDevelopment = process.env.NODE_ENV !== 'production';
       const isProduction = process.env.NODE_ENV === 'production';
+      
+      // Check if Resend is configured (preferred for Render.com)
+      const hasResend = !!(process.env.RESEND_API_KEY?.trim());
       
       // Log email attempt start (especially important for production debugging)
       if (isProduction) {
         logger.error('[PRODUCTION_EMAIL_ATTEMPT] Starting email send', {
           email: normalizedEmail,
           type,
+          hasResend,
           hasSMTPConfig: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD),
           smtpHost: process.env.SMTP_HOST || 'not set',
           smtpPort: process.env.SMTP_PORT || 'not set',
@@ -357,7 +361,36 @@ const sendOTP = async (req, res, next) => {
       
       for (let i = 0; i <= retries; i++) {
         try {
-          // Use SMTP directly
+          // Try Resend first (HTTP API, works better on Render.com)
+          if (hasResend) {
+            try {
+              const { sendOtpEmailResend } = require('../utils/email-resend');
+              await sendOtpEmailResend({
+                to: normalizedEmail,
+                otp,
+                type,
+              });
+              logger.error('[EMAIL_SUCCESS] OTP email sent successfully via Resend', { 
+                email: normalizedEmail, 
+                type, 
+                attempt: i + 1,
+                environment: process.env.NODE_ENV || 'development'
+              });
+              if (isDevelopment) {
+                console.log('✅ Email sent successfully via Resend to:', normalizedEmail);
+              }
+              return; // Success, exit retry loop
+            } catch (resendError) {
+              // Resend failed, try SMTP as fallback
+              logger.error(`Resend failed (attempt ${i + 1}), trying SMTP fallback`, {
+                email: normalizedEmail,
+                error: resendError.message
+              });
+              // Continue to SMTP attempt below
+            }
+          }
+          
+          // Use SMTP as fallback (or primary if Resend not configured)
           await sendOtpEmail({
             to: normalizedEmail,
             otp,

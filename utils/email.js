@@ -29,17 +29,28 @@ const buildTransporter = () => {
   } = process.env;
 
   const smtpHost = SMTP_HOST || FALLBACK_CONFIG.host;
-  // Try port 587 (TLS) for better compatibility on Render.com, fallback to 465 (SSL)
+  // Force port 587 (TLS) for Render.com production - port 465 times out
   // Port 587 is more reliable on cloud platforms like Render.com
   let smtpPort = SMTP_PORT ? Number(SMTP_PORT) : FALLBACK_CONFIG.port;
   let smtpSecure = SMTP_SECURE
     ? SMTP_SECURE.toLowerCase() === 'true'
     : FALLBACK_CONFIG.secure;
   
-  // For production on Render.com, prefer port 587 with TLS (more reliable) if port not explicitly set
-  if (process.env.NODE_ENV === 'production' && !SMTP_PORT) {
-    smtpPort = 587;
-    smtpSecure = false; // TLS (STARTTLS) instead of SSL
+  // For production on Render.com, ALWAYS use port 587 with TLS (port 465 times out)
+  if (process.env.NODE_ENV === 'production') {
+    // Check if we're on Render.com (common pattern in Render.com environment)
+    const isRender = process.env.RENDER || process.env.RENDER_SERVICE_NAME || 
+                     (process.env.HOSTNAME && process.env.HOSTNAME.includes('render'));
+    
+    if (isRender || smtpPort === 465) {
+      // Force 587 for Render.com - port 465 is blocked/slow
+      smtpPort = 587;
+      smtpSecure = false; // TLS (STARTTLS) instead of SSL
+      logger.error('[SMTP_CONFIG] Using port 587 (TLS) for Render.com compatibility', {
+        originalPort: SMTP_PORT || 'default 465',
+        forcedPort: 587
+      });
+    }
   }
   
   const smtpUser = SMTP_USER || SMTP_FROM_EMAIL || FALLBACK_CONFIG.user;
@@ -70,8 +81,8 @@ const buildTransporter = () => {
     },
     // For port 587 (TLS/STARTTLS), we need to allow upgrading connection
     requireTLS: smtpPort === 587,
-    connectionTimeout: 30000, // 30 seconds connection timeout
-    socketTimeout: 30000, // 30 seconds socket timeout
+    connectionTimeout: 60000, // 60 seconds connection timeout (increased for Render.com)
+    socketTimeout: 60000, // 60 seconds socket timeout (increased for Render.com)
     greetingTimeout: 30000, // 30 seconds greeting timeout
     debug: process.env.NODE_ENV !== 'production', // Enable debug in development
     logger: process.env.NODE_ENV !== 'production', // Enable logger in development
@@ -132,8 +143,8 @@ const sendMail = async ({ to, subject, html, text }) => {
   };
 
   // Add timeout wrapper to prevent hanging
-  // Increased timeout for production (Render.com can be slow with SMTP)
-  const EMAIL_TIMEOUT = process.env.NODE_ENV === 'production' ? 30000 : 15000; // 30 seconds for production, 15 for dev
+  // Increased timeout for production (Render.com can be very slow with SMTP)
+  const EMAIL_TIMEOUT = process.env.NODE_ENV === 'production' ? 60000 : 15000; // 60 seconds for production, 15 for dev
   const timeoutSeconds = EMAIL_TIMEOUT / 1000; // Convert to seconds for error message
   
   try {
