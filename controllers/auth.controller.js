@@ -338,28 +338,40 @@ const sendOTP = async (req, res, next) => {
 
     // Send email in background (non-blocking) - don't await
     // PRIORITY ORDER (for Syria support):
-    // 1. Mailgun (works with Syria, good international delivery)
-    // 2. SMTP (Titan Email or other SMTP provider)
+    // 1. Mailgun (works with Syria, good international delivery) - ONLY if fully configured
+    // 2. SMTP (Titan Email or other SMTP provider) - PRIMARY if Mailgun not configured
     // 3. SendGrid (last resort only - does NOT support Syria)
     const sendEmailWithRetry = async (retries = 2) => {
-      // Try Mailgun FIRST (best for Syria and international delivery)
-      if (process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN) {
+      // Try Mailgun FIRST (only if BOTH API key and domain are configured)
+      const mailgunApiKey = process.env.MAILGUN_API_KEY?.trim();
+      const mailgunDomain = process.env.MAILGUN_DOMAIN?.trim();
+      const mailgunConfigured = mailgunApiKey && mailgunDomain && mailgunApiKey !== '' && mailgunDomain !== '';
+      
+      if (mailgunConfigured) {
         try {
           const { sendOtpEmailMailgun } = require('../utils/email-mailgun');
           await sendOtpEmailMailgun({ to: normalizedEmail, otp, type });
           logger.error('[EMAIL_SUCCESS] Mailgun email sent successfully (PRIMARY)', { email: normalizedEmail, type });
           return; // Mailgun succeeded
         } catch (mailgunError) {
+          // Log error but don't break - fall through to SMTP
           logger.error('Mailgun email failed, trying SMTP fallback:', {
             email: normalizedEmail,
             type,
-            error: mailgunError.message
+            error: mailgunError.message,
+            stack: process.env.NODE_ENV !== 'production' ? mailgunError.stack : undefined
           });
-          // Fall through to SMTP fallback
+          // Fall through to SMTP fallback - don't return, continue to SMTP
         }
+      } else {
+        // Mailgun not configured - log and proceed to SMTP
+        logger.info('Mailgun not configured, using SMTP', { 
+          hasApiKey: !!mailgunApiKey, 
+          hasDomain: !!mailgunDomain 
+        });
       }
       
-      // SMTP as primary (if Mailgun not configured) or fallback
+      // SMTP as primary (if Mailgun not configured) or fallback (if Mailgun failed)
       for (let i = 0; i <= retries; i++) {
         try {
           await sendOtpEmail({

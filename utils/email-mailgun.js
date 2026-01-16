@@ -17,15 +17,15 @@ const Mailgun = require('mailgun.js');
 const logger = require('./logger');
 
 const sendOtpEmailMailgun = async ({ to, otp, type }) => {
-  const apiKey = process.env.MAILGUN_API_KEY;
-  const domain = process.env.MAILGUN_DOMAIN;
+  const apiKey = process.env.MAILGUN_API_KEY?.trim();
+  const domain = process.env.MAILGUN_DOMAIN?.trim();
   
-  if (!apiKey) {
-    throw new Error('MAILGUN_API_KEY is not set in environment variables');
+  if (!apiKey || apiKey === '') {
+    throw new Error('MAILGUN_API_KEY is not set or empty in environment variables');
   }
   
-  if (!domain) {
-    throw new Error('MAILGUN_DOMAIN is not set in environment variables');
+  if (!domain || domain === '') {
+    throw new Error('MAILGUN_DOMAIN is not set or empty in environment variables');
   }
 
   const mailgun = new Mailgun(formData);
