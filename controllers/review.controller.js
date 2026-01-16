@@ -6,13 +6,16 @@ const createReview = async (req, res) => {
   try {
     const { name, email, review, rating, userId, propertyId } = req.body;
 
-    if (!name || !email || !review) {
-      return res.status(400).json({ message: 'All fields are required' });
+    if (!name || !review) {
+      return res.status(400).json({ message: 'Name and review are required' });
     }
 
-    const existingReview = await Review.findOne({ email });
-    if (existingReview) {
-      return res.status(400).json({ message: 'Review with this email already exists' });
+    // Only check for duplicate email if email is provided
+    if (email) {
+      const existingReview = await Review.findOne({ email });
+      if (existingReview) {
+        return res.status(400).json({ message: 'Review with this email already exists' });
+      }
     }
 
     const newReview = new Review({ 

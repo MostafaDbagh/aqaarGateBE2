@@ -405,9 +405,9 @@ const createMessage = async (req, res, next) => {
     propertyId = normalizeIdentifier(propertyId);
     agentId = normalizeIdentifier(agentId);
 
-    // Validation
-    if (!propertyId || !agentId || !senderName || !senderEmail || !subject || !message) {
-      return next(errorHandler(400, 'All required fields must be provided'));
+    // Validation (senderEmail is optional)
+    if (!propertyId || !agentId || !senderName || !subject || !message) {
+      return next(errorHandler(400, 'Property ID, Agent ID, Name, Subject, and Message are required'));
     }
 
     // Handle agentId - could be email, user ID, or name

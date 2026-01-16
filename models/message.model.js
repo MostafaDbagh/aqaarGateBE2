@@ -21,7 +21,7 @@ const messageSchema = new mongoose.Schema({
   },
   senderEmail: {
     type: String,
-    required: true,
+    required: false,
     trim: true,
     lowercase: true
   },
