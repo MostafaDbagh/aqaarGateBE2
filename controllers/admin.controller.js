@@ -1252,10 +1252,149 @@ const deleteAgent = async (req, res, next) => {
   }
 };
 
+// Export properties added by admin
+const exportAdminProperties = async (req, res, next) => {
+  try {
+    // Get all admin user IDs
+    const adminUsers = await User.find({ role: 'admin' }).select('_id email username').lean();
+    const adminIds = adminUsers.map(admin => admin._id);
+    const adminEmails = adminUsers.map(admin => admin.email?.toLowerCase()).filter(Boolean);
+    const adminUsernames = adminUsers.map(admin => admin.username?.toLowerCase()).filter(Boolean);
+    
+    // Also include common admin email patterns
+    adminEmails.push('admin@aqaargate.com');
+
+    // Build admin filter - same logic as getPropertiesByAdmin
+    const adminFilterConditions = [
+      { agentId: { $in: adminIds } }
+    ];
+    
+    adminEmails.forEach(email => {
+      adminFilterConditions.push({ agentEmail: new RegExp(email, 'i') });
+      adminFilterConditions.push({ agent: new RegExp(email, 'i') });
+    });
+    
+    adminUsernames.forEach(username => {
+      adminFilterConditions.push({ agent: new RegExp(username, 'i') });
+    });
+    
+    if (adminIds.length > 0) {
+      adminFilterConditions.push({
+        $expr: {
+          $in: [
+            { $toString: '$agentId' },
+            adminIds.map(id => id.toString())
+          ]
+        }
+      });
+    }
+
+    // Get all listings added by admin (no pagination for export)
+    const listings = await Listing.find({
+      isDeleted: { $ne: true },
+      $or: adminFilterConditions
+    }).lean();
+
+    if (!listings || listings.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No properties found to export'
+      });
+    }
+
+    // CSV Headers
+    const headers = [
+      'Property ID',
+      'Property Type',
+      'Property Keyword',
+      'Description',
+      'Price',
+      'Currency',
+      'Status',
+      'Rent Type',
+      'Bedrooms',
+      'Bathrooms',
+      'Size',
+      'Size Unit',
+      'Furnished',
+      'Garages',
+      'Year Built',
+      'Floor',
+      'Address',
+      'City',
+      'State',
+      'Neighborhood',
+      'Amenities',
+      'Approval Status',
+      'Is Sold',
+      'Visit Count'
+    ];
+
+    // Escape CSV values
+    const escapeCSV = (value) => {
+      if (value === null || value === undefined) return '';
+      const stringValue = String(value);
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    };
+
+    // Convert listings to CSV rows
+    const csvRows = listings.map(listing => {
+      return [
+        listing.propertyId || listing._id,
+        listing.propertyType || '',
+        listing.propertyKeyword || '',
+        (listing.propertyDesc || listing.description || '').replace(/"/g, '""'),
+        listing.propertyPrice || 0,
+        listing.currency || 'USD',
+        listing.status || '',
+        listing.rentType || '',
+        listing.bedrooms || 0,
+        listing.bathrooms || 0,
+        listing.size || 0,
+        listing.sizeUnit || 'sqm',
+        listing.furnished ? 'Yes' : 'No',
+        listing.garages ? 'Yes' : 'No',
+        listing.yearBuilt || '',
+        listing.floor || '',
+        (listing.address || '').replace(/"/g, '""'),
+        listing.city || '',
+        listing.state || '',
+        (listing.neighborhood || '').replace(/"/g, '""'),
+        Array.isArray(listing.amenities) ? listing.amenities.join('; ') : '',
+        listing.approvalStatus || 'pending',
+        listing.isSold ? 'Yes' : 'No',
+        listing.visitCount || 0
+      ].map(escapeCSV).join(',');
+    });
+
+    // Build CSV content
+    const csvContent = [
+      headers.map(escapeCSV).join(','),
+      ...csvRows
+    ].join('\n');
+
+    // Set response headers for CSV download
+    const filename = `admin_properties_export_${new Date().toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', Buffer.byteLength(csvContent, 'utf8'));
+
+    // Send CSV file with BOM for Excel UTF-8 support
+    res.status(200).send('\ufeff' + csvContent);
+  } catch (error) {
+    logger.error('Export Admin Properties Error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   // Properties
   getAllProperties,
   getPropertiesByAdmin,
+  exportAdminProperties,
   updatePropertyApproval,
   deleteProperty,
   getSoldProperties,
