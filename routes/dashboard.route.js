@@ -3,7 +3,12 @@ const router = express.Router();
 const {
   getDashboardStats,
   getDashboardAnalytics,
-  getDashboardNotifications
+  getDashboardNotifications,
+  getConversionRates,
+  getTopPerformingProperties,
+  getStatsComparison,
+  getListingHealthScores,
+  getLeadPipeline
 } = require('../controllers/dashboard.controller');
 const verifyToken = require('../utils/verifyUser');
 
@@ -34,6 +39,50 @@ router.get('/analytics', getDashboardAnalytics);
  * @returns {Object} Notifications including unread messages, pending listings, alerts
  */
 router.get('/notifications', getDashboardNotifications);
+
+/**
+ * @route GET /api/dashboard/conversion-rates
+ * @desc Get conversion rate tracking (views → inquiries → contacts)
+ * @access Private
+ * @query {string} period - Time period (7d, 30d, 90d, 1y)
+ * @returns {Object} Conversion rates and funnel data
+ */
+router.get('/conversion-rates', getConversionRates);
+
+/**
+ * @route GET /api/dashboard/top-properties
+ * @desc Get top performing properties
+ * @access Private
+ * @query {number} limit - Number of properties to return
+ * @query {string} sortBy - Sort by (visits, inquiries, conversion, contacts)
+ * @returns {Object} Top performing properties with metrics
+ */
+router.get('/top-properties', getTopPerformingProperties);
+
+/**
+ * @route GET /api/dashboard/stats-comparison
+ * @desc Get stats comparison (MoM, YoY)
+ * @access Private
+ * @query {string} type - Comparison type (mom, yoy)
+ * @returns {Object} Comparison data with percentage changes
+ */
+router.get('/stats-comparison', getStatsComparison);
+
+/**
+ * @route GET /api/dashboard/health-scores
+ * @desc Get listing health scores
+ * @access Private
+ * @returns {Object} Health scores for all listings with recommendations
+ */
+router.get('/health-scores', getListingHealthScores);
+
+/**
+ * @route GET /api/dashboard/lead-pipeline
+ * @desc Get lead pipeline (categorized messages)
+ * @access Private
+ * @returns {Object} Leads organized by pipeline stage
+ */
+router.get('/lead-pipeline', getLeadPipeline);
 
 /**
  * @route GET /api/dashboard/health

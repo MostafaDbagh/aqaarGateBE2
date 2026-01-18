@@ -180,6 +180,7 @@ const cityRoutes = require('./routes/city.route');
 const propertyRentalRoutes = require('./routes/propertyRental.route');
 const adminRoutes = require('./routes/admin.route');
 const diagnosticRoutes = require('./routes/diagnostic.route');
+const notificationRoutes = require('./routes/notification.route');
 
 app.use('/api/auth', authRouter);
 app.use('/api/diagnostic', diagnosticRoutes);
@@ -199,6 +200,7 @@ app.use('/api/categories', i18nMiddleware, categoryRoutes);
 app.use('/api/cities', i18nMiddleware, cityRoutes);
 app.use('/api/property-rental', propertyRentalRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

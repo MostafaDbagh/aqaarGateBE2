@@ -286,6 +286,22 @@ const updatePropertyApproval = async (req, res, next) => {
     // Reload from database to verify the change
     const savedProperty = await Listing.findById(id);
     
+    // Notify agent when listing is approved
+    if (approvalStatus.toLowerCase() === 'approved' && property.agentId) {
+      try {
+        const { notifyAgentListingApproved } = require('../utils/notifications');
+        const listingTitle = property.propertyTitle || property.propertyDesc || property.propertyKeyword || 'Untitled Property';
+        await notifyAgentListingApproved(
+          property.agentId.toString(),
+          property._id.toString(),
+          listingTitle
+        );
+      } catch (notifError) {
+        // Don't fail approval if notification fails
+        logger.error('Failed to send listing approval notification:', notifError);
+      }
+    }
+    
     logger.info('[ADMIN_PROPERTY_APPROVAL]', {
       propertyId: id,
       propertyKeyword: property.propertyKeyword,
@@ -1109,6 +1125,18 @@ const unblockAgent = async (req, res, next) => {
     agent.blockedAt = null;
     agent.blockedReason = '';
     await agent.save();
+
+    // Notify agent when approved (unblocked)
+    try {
+      const { notifyAgentApproved } = require('../utils/notifications');
+      await notifyAgentApproved(
+        agent._id.toString(),
+        agent.username || agent.agentName || agent.email
+      );
+    } catch (notifError) {
+      // Don't fail unblock if notification fails
+      logger.error('Failed to send agent approval notification:', notifError);
+    }
 
     logger.info('[ADMIN_UNBLOCK_AGENT]', {
       agentId: id,
