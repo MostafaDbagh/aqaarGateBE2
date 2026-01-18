@@ -5,6 +5,7 @@ const {
   // Properties
   getAllProperties,
   getPropertiesByAdmin,
+  exportAdminProperties,
   updatePropertyApproval,
   deleteProperty,
   getSoldProperties,
@@ -38,6 +39,7 @@ router.get('/dashboard/stats', getDashboardStats);
 // Properties
 router.get('/properties', getAllProperties);
 router.get('/properties-by-admin', getPropertiesByAdmin);
+router.get('/properties-by-admin/export', exportAdminProperties);
 router.put('/properties/:id/approval', updatePropertyApproval);
 router.delete('/properties/:id', deleteProperty);
 
