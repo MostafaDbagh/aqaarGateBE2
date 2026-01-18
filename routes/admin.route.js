@@ -19,10 +19,12 @@ const {
   deleteRentalService,
   // Users
   getAllUsers,
+  deleteUser,
   // Agents
   getAllAgents,
   blockAgent,
   unblockAgent,
+  deleteAgent,
   // Dashboard
   getDashboardStats
 } = require('../controllers/admin.controller');
@@ -55,13 +57,15 @@ router.get('/rental-services', getAllRentalServices);
 router.put('/rental-services/:id', updateRentalService);
 router.delete('/rental-services/:id', deleteRentalService);
 
-// Users (read-only)
+// Users
 router.get('/users', getAllUsers);
+router.delete('/users/:id', deleteUser);
 
 // Agents
 router.get('/agents', getAllAgents);
 router.put('/agents/:id/block', blockAgent);
 router.put('/agents/:id/unblock', unblockAgent);
+router.delete('/agents/:id', deleteAgent);
 
 module.exports = router;
 

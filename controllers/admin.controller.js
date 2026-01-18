@@ -1129,6 +1129,101 @@ const unblockAgent = async (req, res, next) => {
   }
 };
 
+// Delete user
+const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return next(errorHandler(404, 'User not found'));
+    }
+
+    // Prevent deleting admin users
+    if (user.role === 'admin') {
+      return next(errorHandler(400, 'Cannot delete admin users'));
+    }
+
+    // Delete the user
+    await User.findByIdAndDelete(id);
+
+    logger.info('[ADMIN_DELETE_USER]', {
+      userId: id,
+      userEmail: user.email,
+      userRole: user.role,
+      adminId: req.user.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    logger.error('[ADMIN_DELETE_USER_ERROR]', {
+      error: error.message,
+      stack: error.stack
+    });
+    next(error);
+  }
+};
+
+// Delete agent (with cascade delete of listings)
+const deleteAgent = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const agent = await User.findById(id);
+    if (!agent) {
+      return next(errorHandler(404, 'Agent not found'));
+    }
+
+    if (agent.role !== 'agent') {
+      return next(errorHandler(400, 'User is not an agent'));
+    }
+
+    // Get all listings by this agent before deletion for logging
+    const listings = await Listing.find({
+      $or: [
+        { agent: agent._id.toString() },
+        { agentId: agent._id }
+      ]
+    });
+
+    const listingIds = listings.map(listing => listing._id.toString());
+
+    // Delete all listings by this agent (cascade delete)
+    const deleteResult = await Listing.deleteMany({
+      $or: [
+        { agent: agent._id.toString() },
+        { agentId: agent._id }
+      ]
+    });
+
+    // Delete the agent
+    await User.findByIdAndDelete(id);
+
+    logger.info('[ADMIN_DELETE_AGENT]', {
+      agentId: id,
+      agentEmail: agent.email,
+      deletedListingsCount: deleteResult.deletedCount,
+      listingIds,
+      adminId: req.user.id
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Agent and ${deleteResult.deletedCount} listing(s) deleted successfully`,
+      deletedListingsCount: deleteResult.deletedCount
+    });
+  } catch (error) {
+    logger.error('[ADMIN_DELETE_AGENT_ERROR]', {
+      error: error.message,
+      stack: error.stack
+    });
+    next(error);
+  }
+};
+
 module.exports = {
   // Properties
   getAllProperties,
@@ -1147,10 +1242,12 @@ module.exports = {
   deleteRentalService,
   // Users
   getAllUsers,
+  deleteUser,
   // Agents
   getAllAgents,
   blockAgent,
   unblockAgent,
+  deleteAgent,
   // Dashboard
   getDashboardStats
 };
