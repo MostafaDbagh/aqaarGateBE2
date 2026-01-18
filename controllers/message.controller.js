@@ -484,6 +484,41 @@ const createMessage = async (req, res, next) => {
     // Populate property details for response
     await newMessage.populate('propertyId', 'propertyId propertyKeyword propertyPrice status propertyType');
 
+    // Notify agent about new message
+    try {
+      const { notifyAgentMessage } = require('../utils/notifications');
+      await notifyAgentMessage(
+        finalAgentId.toString(),
+        newMessage._id.toString(),
+        senderName,
+        subject
+      );
+    } catch (notifError) {
+      // Don't fail message creation if notification fails
+      logger.error('Failed to send message notification:', notifError);
+    }
+
+    // Notify admin if message is for admin listing
+    try {
+      const listing = await Listing.findById(propertyId).select('agentId').lean();
+      if (listing && listing.agentId) {
+        const User = require('../models/user.model');
+        const agent = await User.findById(listing.agentId).select('role').lean();
+        // If listing belongs to an admin, notify admin
+        if (agent && agent.role === 'admin') {
+          const { notifyAdminMessage } = require('../utils/notifications');
+          await notifyAdminMessage(
+            listing.agentId.toString(),
+            newMessage._id.toString(),
+            senderName,
+            subject
+          );
+        }
+      }
+    } catch (notifError) {
+      logger.error('Failed to send admin message notification:', notifError);
+    }
+
     res.status(201).json({
       success: true,
       data: newMessage

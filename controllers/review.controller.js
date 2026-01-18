@@ -28,6 +28,44 @@ const createReview = async (req, res) => {
     });
     await newReview.save();
 
+    // Notify agent or admin about new review
+    try {
+      const Listing = require('../models/listing.model');
+      const User = require('../models/user.model');
+      const listing = await Listing.findById(propertyId).select('agentId propertyTitle propertyKeyword').lean();
+      
+      if (listing && listing.agentId) {
+        const agent = await User.findById(listing.agentId).select('role').lean();
+        const propertyTitle = listing.propertyTitle || listing.propertyKeyword || 'Untitled Property';
+        
+        if (agent) {
+          if (agent.role === 'admin') {
+            // Notify admin
+            const { notifyAdminReview } = require('../utils/notifications');
+            await notifyAdminReview(
+              listing.agentId.toString(),
+              newReview._id.toString(),
+              name,
+              propertyTitle
+            );
+          } else if (agent.role === 'agent') {
+            // Notify agent
+            const { notifyAgentReview } = require('../utils/notifications');
+            await notifyAgentReview(
+              listing.agentId.toString(),
+              newReview._id.toString(),
+              name,
+              propertyTitle,
+              rating || 5
+            );
+          }
+        }
+      }
+    } catch (notifError) {
+      // Don't fail review creation if notification fails
+      logger.error('Failed to send review notification:', notifError);
+    }
+
     res.status(201).json({ message: 'Review created', review: newReview });
   } catch (error) {
     logger.error('Error creating review:', error);

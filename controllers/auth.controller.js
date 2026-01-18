@@ -125,6 +125,22 @@ const signup = async (req, res, next) => {
   const newUser = new User(userData);
   try {
     await newUser.save();
+    
+    // Notify admin if new agent registered
+    if (role === 'agent') {
+      try {
+        const { notifyAdminNewAgent } = require('../utils/notifications');
+        await notifyAdminNewAgent(
+          newUser._id.toString(),
+          finalAgentName || newUser.username || newUser.email,
+          newUser.email
+        );
+      } catch (notifError) {
+        // Don't fail signup if notification fails
+        logger.error('Failed to send new agent notification:', notifError);
+      }
+    }
+    
     res.status(201).json({
       success: true,
       message: 'User created successfully!',

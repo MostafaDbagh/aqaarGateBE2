@@ -270,6 +270,20 @@ const createListing = async (req, res, next) => {
     // Log the saved price to verify it matches what we sent
     logger.info(`💰 Property Price - Saved in DB: ${newListing.propertyPrice}, Type: ${typeof newListing.propertyPrice}, String: ${newListing.propertyPrice.toString()}`);
     logger.info(`✅ Listing created successfully: ${newListing._id}`);
+    
+    // Notify admin about new listing
+    try {
+      const { notifyAdminAgentNewListing } = require('../utils/notifications');
+      const listingTitle = newListing.propertyTitle || newListing.propertyDesc || newListing.propertyKeyword || 'Untitled Property';
+      await notifyAdminAgentNewListing(
+        newListing._id.toString(),
+        listingData.agentId || listingData.agent || req.user?.id,
+        listingTitle
+      );
+    } catch (notifError) {
+      // Don't fail listing creation if notification fails
+      logger.error('Failed to send new listing notification:', notifError);
+    }
 
     // Cache removed - data is always fresh now
 
@@ -353,6 +367,21 @@ const deleteListing = async (req, res, next) => {
     listing.deletedReason = deletedReason || 'No reason provided';
     listing.deletedAt = new Date();
     await listing.save();
+    
+    // Notify admin about listing deletion (only if not deleted by admin)
+    if (req.user.role !== 'admin') {
+      try {
+        const { notifyAdminAgentDeleteListing } = require('../utils/notifications');
+        const listingTitle = listing.propertyTitle || listing.propertyDesc || listing.propertyKeyword || 'Untitled Property';
+        await notifyAdminAgentDeleteListing(
+          listing._id.toString(),
+          listing.agentId || listing.agent,
+          listingTitle
+        );
+      } catch (notifError) {
+        logger.error('Failed to send delete listing notification:', notifError);
+      }
+    }
 
     // Cache removed - data is always fresh now
 
@@ -576,6 +605,21 @@ const updateListing = async (req, res, next) => {
     
     // Log the saved approvalStatus to verify it matches what we intended
     logger.info(`📋 Update Listing - Saved approvalStatus in DB: ${updatedListing.approvalStatus}, Original was: ${listing.approvalStatus}`);
+    
+    // Notify admin about listing update (only if not updated by admin)
+    if (req.user.role !== 'admin') {
+      try {
+        const { notifyAdminAgentUpdateListing } = require('../utils/notifications');
+        const listingTitle = updatedListing.propertyTitle || updatedListing.propertyDesc || updatedListing.propertyKeyword || 'Untitled Property';
+        await notifyAdminAgentUpdateListing(
+          updatedListing._id.toString(),
+          updatedListing.agentId || updatedListing.agent,
+          listingTitle
+        );
+      } catch (notifError) {
+        logger.error('Failed to send update listing notification:', notifError);
+      }
+    }
 
     res.status(200).json(updatedListing);
   } catch (error) {
@@ -899,6 +943,24 @@ const incrementVisitCount = async (req, res, next) => {
     if (!listing) {
       return next(errorHandler(404, 'Listing not found!'));
     }
+    
+    // Notify agent about listing view milestone
+    if (listing.agentId) {
+      try {
+        const { notifyAgentListingView } = require('../utils/notifications');
+        const listingTitle = listing.propertyTitle || listing.propertyDesc || listing.propertyKeyword || 'Untitled Property';
+        await notifyAgentListingView(
+          listing.agentId.toString(),
+          listing._id.toString(),
+          listingTitle,
+          listing.visitCount
+        );
+      } catch (notifError) {
+        // Don't fail visit increment if notification fails
+        logger.debug('Failed to send view milestone notification:', notifError);
+      }
+    }
+    
     res.status(200).json({ visitCount: listing.visitCount });
   } catch (error) {
     next(error);
@@ -1310,6 +1372,271 @@ const aiSearch = async (req, res, next) => {
   }
 };
 
+/**
+ * Export properties to CSV
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const exportProperties = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId).select('agentId role');
+    const queryId = (user && user.role === 'agent' && user.agentId) ? user.agentId.toString() : userId;
+    const isObjectId = mongoose.Types.ObjectId.isValid(queryId);
+    const queryIdObj = isObjectId ? new mongoose.Types.ObjectId(queryId) : queryId;
+
+    // Get all listings for this agent (no pagination for export)
+    const listings = await Listing.find({
+      $or: [{ agent: queryId }, { agentId: queryIdObj }],
+      isDeleted: { $ne: true }
+    }).lean();
+
+    if (!listings || listings.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No properties found to export'
+      });
+    }
+
+    // CSV Headers
+    const headers = [
+      'Property ID',
+      'Property Type',
+      'Property Keyword',
+      'Description',
+      'Price',
+      'Currency',
+      'Status',
+      'Rent Type',
+      'Bedrooms',
+      'Bathrooms',
+      'Size',
+      'Size Unit',
+      'Furnished',
+      'Garages',
+      'Year Built',
+      'Floor',
+      'Address',
+      'City',
+      'State',
+      'Neighborhood',
+      'Amenities',
+      'Approval Status',
+      'Is Sold',
+      'Visit Count'
+    ];
+
+    // Convert listings to CSV rows
+    const csvRows = listings.map(listing => {
+      return [
+        listing.propertyId || listing._id,
+        listing.propertyType || '',
+        listing.propertyKeyword || '',
+        (listing.propertyDesc || listing.description || '').replace(/"/g, '""'), // Escape quotes
+        listing.propertyPrice || 0,
+        listing.currency || 'USD',
+        listing.status || '',
+        listing.rentType || '',
+        listing.bedrooms || 0,
+        listing.bathrooms || 0,
+        listing.size || 0,
+        listing.sizeUnit || 'sqm',
+        listing.furnished ? 'Yes' : 'No',
+        listing.garages ? 'Yes' : 'No',
+        listing.yearBuilt || '',
+        listing.floor || '',
+        (listing.address || '').replace(/"/g, '""'),
+        listing.city || '',
+        listing.state || '',
+        (listing.neighborhood || '').replace(/"/g, '""'),
+        Array.isArray(listing.amenities) ? listing.amenities.join('; ') : '',
+        listing.approvalStatus || 'pending',
+        listing.isSold ? 'Yes' : 'No',
+        listing.visitCount || 0
+      ];
+    });
+
+    // Escape CSV values
+    const escapeCSV = (value) => {
+      if (value === null || value === undefined) return '';
+      const stringValue = String(value);
+      // If value contains comma, quote, or newline, wrap in quotes and escape quotes
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    };
+
+    // Build CSV content
+    const csvContent = [
+      headers.map(escapeCSV).join(','),
+      ...csvRows.map(row => row.map(escapeCSV).join(','))
+    ].join('\n');
+
+    // Set response headers for CSV download
+    const filename = `properties_export_${new Date().toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', Buffer.byteLength(csvContent, 'utf8'));
+
+    // Send CSV file
+    res.status(200).send('\ufeff' + csvContent); // BOM for Excel UTF-8 support
+  } catch (error) {
+    logger.error('Export Properties Error:', error);
+    next(error);
+  }
+};
+
+/**
+ * Import properties from CSV
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const importProperties = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId).select('agentId role agent');
+    const queryId = (user && user.role === 'agent' && user.agentId) ? user.agentId.toString() : userId;
+    
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        success: false,
+        message: 'No CSV file uploaded'
+      });
+    }
+
+    // Parse CSV buffer to string
+    const csvContent = req.file.buffer.toString('utf-8');
+    
+    // Remove BOM if present
+    const csvText = csvContent.replace(/^\ufeff/, '');
+    
+    // Simple CSV parser (handles quoted values)
+    const parseCSV = (text) => {
+      const lines = text.split('\n').filter(line => line.trim());
+      if (lines.length < 2) return { headers: [], rows: [] };
+      
+      // Parse headers
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      
+      // Parse rows
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = [];
+        let currentValue = '';
+        let inQuotes = false;
+        
+        for (let j = 0; j < lines[i].length; j++) {
+          const char = lines[i][j];
+          if (char === '"') {
+            if (inQuotes && lines[i][j + 1] === '"') {
+              currentValue += '"';
+              j++; // Skip next quote
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            values.push(currentValue.trim());
+            currentValue = '';
+          } else {
+            currentValue += char;
+          }
+        }
+        values.push(currentValue.trim()); // Add last value
+        rows.push(values);
+      }
+      
+      return { headers, rows };
+    };
+
+    const { headers, rows } = parseCSV(csvText);
+    
+    if (rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'CSV file is empty or has no data rows'
+      });
+    }
+
+    // Map CSV columns to listing fields
+    const getColumnIndex = (name) => {
+      const index = headers.findIndex(h => 
+        h.toLowerCase().replace(/\s+/g, ' ') === name.toLowerCase().replace(/\s+/g, ' ')
+      );
+      return index >= 0 ? index : null;
+    };
+
+    const results = {
+      success: 0,
+      errors: [],
+      total: rows.length
+    };
+
+    // Process each row
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      try {
+        // Map CSV values to listing data
+        const propertyData = {
+          propertyId: row[getColumnIndex('Property ID')] || `PROP_${Date.now()}_${i}`,
+          propertyType: row[getColumnIndex('Property Type')] || 'Apartment',
+          propertyKeyword: row[getColumnIndex('Property Keyword')] || '',
+          propertyDesc: row[getColumnIndex('Description')] || '',
+          propertyPrice: parseFloat(row[getColumnIndex('Price')]) || 0,
+          currency: row[getColumnIndex('Currency')] || 'USD',
+          status: (row[getColumnIndex('Status')] || 'sale').toLowerCase(),
+          rentType: row[getColumnIndex('Rent Type')] || undefined,
+          bedrooms: parseInt(row[getColumnIndex('Bedrooms')]) || 0,
+          bathrooms: parseInt(row[getColumnIndex('Bathrooms')]) || 0,
+          size: parseFloat(row[getColumnIndex('Size')]) || 0,
+          sizeUnit: row[getColumnIndex('Size Unit')] || 'sqm',
+          furnished: (row[getColumnIndex('Furnished')] || '').toLowerCase() === 'yes',
+          garages: (row[getColumnIndex('Garages')] || '').toLowerCase() === 'yes',
+          yearBuilt: row[getColumnIndex('Year Built')] ? parseInt(row[getColumnIndex('Year Built')]) : null,
+          floor: row[getColumnIndex('Floor')] ? parseInt(row[getColumnIndex('Floor')]) : undefined,
+          address: row[getColumnIndex('Address')] || '',
+          city: row[getColumnIndex('City')] || '',
+          state: row[getColumnIndex('State')] || undefined,
+          neighborhood: row[getColumnIndex('Neighborhood')] || '',
+          amenities: row[getColumnIndex('Amenities')] ? 
+            row[getColumnIndex('Amenities')].split(';').map(a => a.trim()).filter(a => a) : [],
+          approvalStatus: (row[getColumnIndex('Approval Status')] || 'pending').toLowerCase(),
+          isSold: (row[getColumnIndex('Is Sold')] || '').toLowerCase() === 'yes',
+          visitCount: parseInt(row[getColumnIndex('Visit Count')]) || 0,
+          agent: queryId,
+          agentId: mongoose.Types.ObjectId.isValid(queryId) ? new mongoose.Types.ObjectId(queryId) : null,
+          isDeleted: false
+        };
+
+        // Holiday Homes Requirements
+        if (propertyData.propertyType === 'Holiday Home') {
+          propertyData.status = 'rent';
+          propertyData.furnished = true;
+        }
+
+        // Create listing
+        await Listing.create(propertyData);
+        results.success++;
+      } catch (error) {
+        results.errors.push({
+          row: i + 2, // +2 because row 1 is headers, rows start at 2
+          error: error.message
+        });
+        logger.error(`Import error at row ${i + 2}:`, error);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Imported ${results.success} of ${results.total} properties`,
+      data: results
+    });
+  } catch (error) {
+    logger.error('Import Properties Error:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   createListing,
   deleteListing,
@@ -1322,4 +1649,6 @@ module.exports = {
   incrementVisitCount,
   getMostVisitedListings,
   aiSearch,
+  exportProperties,
+  importProperties,
 };
