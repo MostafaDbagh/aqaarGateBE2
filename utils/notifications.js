@@ -75,46 +75,87 @@ const notifyAdminNewAgent = async (agentId, agentName, agentEmail) => {
   try {
     // Get all admin users
     const User = require('../models/user.model');
-    const admins = await User.find({ role: 'admin' }).select('_id').lean();
+    const admins = await User.find({ role: 'admin' }).select('_id email username').lean();
 
-    const notifications = await Promise.all(
-      admins.map(admin =>
-        createNotification({
-          recipientId: admin._id,
-          type: ADMIN_NOTIFICATION_TYPES.NEW_AGENT,
-          title: 'New Agent Registered',
-          message: `${agentName || agentEmail} has registered as a new agent`,
-          relatedEntity: {
-            entityType: 'user',
-            entityId: agentId
-          },
-          data: {
-            agentId,
-            agentName,
-            agentEmail
-          },
-          metadata: {
-            senderId: agentId,
-            senderName: agentName || agentEmail,
-            source: 'system'
-          }
-        })
-      )
-    );
-
-    logger.info('[NOTIFICATION_ADMIN_NEW_AGENT]', {
+    logger.info('[NOTIFICATION_ADMIN_NEW_AGENT_START]', {
       agentId,
+      agentName,
+      agentEmail,
       adminCount: admins.length,
-      notificationsCreated: notifications.length
+      adminIds: admins.map(a => a._id.toString())
     });
 
-    return notifications;
+    if (!admins || admins.length === 0) {
+      logger.warn('[NOTIFICATION_ADMIN_NEW_AGENT_NO_ADMINS]', {
+        agentId,
+        message: 'No admin users found in database'
+      });
+      return [];
+    }
+
+    const notifications = await Promise.all(
+      admins.map(async (admin) => {
+        try {
+          const notification = await createNotification({
+            recipientId: admin._id,
+            type: ADMIN_NOTIFICATION_TYPES.NEW_AGENT,
+            title: 'New Agent Registered',
+            message: `${agentName || agentEmail} has registered as a new agent`,
+            relatedEntity: {
+              entityType: 'user',
+              entityId: agentId
+            },
+            data: {
+              agentId,
+              agentName,
+              agentEmail
+            },
+            metadata: {
+              senderId: agentId,
+              senderName: agentName || agentEmail,
+              source: 'system'
+            }
+          });
+          logger.info('[NOTIFICATION_CREATED_FOR_ADMIN]', {
+            adminId: admin._id.toString(),
+            adminEmail: admin.email,
+            notificationId: notification._id.toString()
+          });
+          return notification;
+        } catch (err) {
+          logger.error('[NOTIFICATION_CREATE_FAILED_FOR_ADMIN]', {
+            adminId: admin._id.toString(),
+            adminEmail: admin.email,
+            error: err.message,
+            stack: err.stack
+          });
+          return null;
+        }
+      })
+    );
+
+    const successfulNotifications = notifications.filter(n => n !== null);
+
+    logger.info('[NOTIFICATION_ADMIN_NEW_AGENT_SUCCESS]', {
+      agentId,
+      agentName,
+      agentEmail,
+      adminCount: admins.length,
+      notificationsCreated: successfulNotifications.length,
+      notificationIds: successfulNotifications.map(n => n._id.toString())
+    });
+
+    return successfulNotifications;
   } catch (error) {
     logger.error('[NOTIFICATION_ADMIN_NEW_AGENT_ERROR]', {
       error: error.message,
-      agentId
+      stack: error.stack,
+      agentId,
+      agentName,
+      agentEmail
     });
     // Don't throw - notification failure shouldn't break the flow
+    return [];
   }
 };
 

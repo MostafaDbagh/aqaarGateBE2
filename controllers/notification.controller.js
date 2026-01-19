@@ -26,15 +26,17 @@ const getNotifications = async (req, res, next) => {
     // Build query
     const query = { recipientId: userId };
     
-    if (type) {
+    if (type && type !== 'null' && type !== 'undefined') {
       query.type = type;
     }
     
-    if (isRead !== null) {
+    // Handle isRead filter - only apply if explicitly set to true/false
+    // Ignore null, undefined, or string "null"
+    if (isRead !== null && isRead !== undefined && isRead !== 'null' && isRead !== 'undefined') {
       query.isRead = isRead === 'true' || isRead === true;
     }
     
-    if (priority) {
+    if (priority && priority !== 'null' && priority !== 'undefined') {
       query.priority = priority;
     }
 
