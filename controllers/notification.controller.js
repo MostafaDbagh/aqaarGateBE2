@@ -46,11 +46,46 @@ const getNotifications = async (req, res, next) => {
     const totalPages = Math.ceil(total / parseInt(limit));
 
     // Get notifications
-    const notifications = await Notification.find(query)
+    let notifications = await Notification.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
+
+    // For notifications related to listings, fetch propertyId if not in data
+    const Listing = require('../models/listing.model');
+    const notificationsWithPropertyId = await Promise.all(
+      notifications.map(async (notification) => {
+        // If notification is related to a listing and doesn't have propertyId in data
+        if (
+          notification.relatedEntity?.entityType === 'listing' &&
+          notification.relatedEntity?.entityId &&
+          !notification.data?.propertyId
+        ) {
+          try {
+            const listing = await Listing.findById(notification.relatedEntity.entityId)
+              .select('propertyId')
+              .lean();
+            
+            if (listing && listing.propertyId) {
+              // Add propertyId to notification data
+              notification.data = notification.data || {};
+              notification.data.propertyId = listing.propertyId;
+            }
+          } catch (err) {
+            // If listing not found or error, continue without propertyId
+            logger.warn('[NOTIFICATION_FETCH_PROPERTY_ID_ERROR]', {
+              notificationId: notification._id,
+              listingId: notification.relatedEntity?.entityId,
+              error: err.message
+            });
+          }
+        }
+        return notification;
+      })
+    );
+
+    notifications = notificationsWithPropertyId;
 
     // Get unread count
     const unreadCount = await Notification.countDocuments({
