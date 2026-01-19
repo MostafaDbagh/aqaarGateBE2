@@ -278,7 +278,8 @@ const createListing = async (req, res, next) => {
       await notifyAdminAgentNewListing(
         newListing._id.toString(),
         listingData.agentId || listingData.agent || req.user?.id,
-        listingTitle
+        listingTitle,
+        newListing.propertyId // Pass propertyId (PROP_xxx) instead of ObjectId
       );
     } catch (notifError) {
       // Don't fail listing creation if notification fails
@@ -376,7 +377,8 @@ const deleteListing = async (req, res, next) => {
         await notifyAdminAgentDeleteListing(
           listing._id.toString(),
           listing.agentId || listing.agent,
-          listingTitle
+          listingTitle,
+          listing.propertyId // Pass propertyId (PROP_xxx) instead of ObjectId
         );
       } catch (notifError) {
         logger.error('Failed to send delete listing notification:', notifError);
@@ -614,7 +616,8 @@ const updateListing = async (req, res, next) => {
         await notifyAdminAgentUpdateListing(
           updatedListing._id.toString(),
           updatedListing.agentId || updatedListing.agent,
-          listingTitle
+          listingTitle,
+          updatedListing.propertyId // Pass propertyId (PROP_xxx) instead of ObjectId
         );
       } catch (notifError) {
         logger.error('Failed to send update listing notification:', notifError);

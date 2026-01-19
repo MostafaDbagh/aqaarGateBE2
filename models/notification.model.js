@@ -26,6 +26,7 @@ const notificationSchema = new mongoose.Schema({
       'agent.review',
       'agent.message',
       'agent.listing_approved',
+      'agent.listing_rejected',
       'agent.agent_approved'
     ],
     index: true

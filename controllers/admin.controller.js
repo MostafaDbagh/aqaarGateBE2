@@ -286,19 +286,29 @@ const updatePropertyApproval = async (req, res, next) => {
     // Reload from database to verify the change
     const savedProperty = await Listing.findById(id);
     
-    // Notify agent when listing is approved
-    if (approvalStatus.toLowerCase() === 'approved' && property.agentId) {
+    // Notify agent when listing is approved or rejected
+    if (property.agentId && (approvalStatus.toLowerCase() === 'approved' || approvalStatus.toLowerCase() === 'rejected')) {
       try {
-        const { notifyAgentListingApproved } = require('../utils/notifications');
+        const { notifyAgentListingApproved, notifyAgentListingRejected } = require('../utils/notifications');
         const listingTitle = property.propertyTitle || property.propertyDesc || property.propertyKeyword || 'Untitled Property';
-        await notifyAgentListingApproved(
-          property.agentId.toString(),
-          property._id.toString(),
-          listingTitle
-        );
+        
+        if (approvalStatus.toLowerCase() === 'approved') {
+          await notifyAgentListingApproved(
+            property.agentId.toString(),
+            property._id.toString(),
+            listingTitle
+          );
+        } else if (approvalStatus.toLowerCase() === 'rejected') {
+          await notifyAgentListingRejected(
+            property.agentId.toString(),
+            property._id.toString(),
+            listingTitle,
+            notes || null // Use notes as rejection reason if provided
+          );
+        }
       } catch (notifError) {
-        // Don't fail approval if notification fails
-        logger.error('Failed to send listing approval notification:', notifError);
+        // Don't fail approval/rejection if notification fails
+        logger.error('Failed to send listing status notification:', notifError);
       }
     }
     
@@ -1118,6 +1128,11 @@ const unblockAgent = async (req, res, next) => {
 
     if (agent.role !== 'agent') {
       return next(errorHandler(400, 'User is not an agent'));
+    }
+
+    // If agentName doesn't exist, use username as fallback
+    if (!agent.agentName || agent.agentName.trim().length === 0) {
+      agent.agentName = agent.username || agent.email;
     }
 
     // Unblock the agent

@@ -77,10 +77,26 @@ const notifyAdminNewAgent = async (agentId, agentName, agentEmail) => {
     const User = require('../models/user.model');
     const admins = await User.find({ role: 'admin' }).select('_id email username').lean();
 
+    // Get agent user to fetch username if agentName is not provided
+    let agentUsername = null;
+    if (!agentName || agentName.trim().length === 0) {
+      try {
+        const agent = await User.findById(agentId).select('username').lean();
+        agentUsername = agent?.username || null;
+      } catch (err) {
+        logger.warn('[NOTIFICATION_ADMIN_NEW_AGENT_FETCH_USERNAME_ERROR]', { agentId, error: err.message });
+      }
+    }
+
+    // Use agentName, fallback to username, then email
+    const displayName = agentName || agentUsername || agentEmail;
+
     logger.info('[NOTIFICATION_ADMIN_NEW_AGENT_START]', {
       agentId,
       agentName,
+      agentUsername,
       agentEmail,
+      displayName,
       adminCount: admins.length,
       adminIds: admins.map(a => a._id.toString())
     });
@@ -100,19 +116,19 @@ const notifyAdminNewAgent = async (agentId, agentName, agentEmail) => {
             recipientId: admin._id,
             type: ADMIN_NOTIFICATION_TYPES.NEW_AGENT,
             title: 'New Agent Registered',
-            message: `${agentName || agentEmail} has registered as a new agent`,
+            message: `${displayName} has registered as a new agent`,
             relatedEntity: {
               entityType: 'user',
               entityId: agentId
             },
             data: {
               agentId,
-              agentName,
+              agentName: displayName,
               agentEmail
             },
             metadata: {
               senderId: agentId,
-              senderName: agentName || agentEmail,
+              senderName: displayName,
               source: 'system'
             }
           });
@@ -139,7 +155,9 @@ const notifyAdminNewAgent = async (agentId, agentName, agentEmail) => {
     logger.info('[NOTIFICATION_ADMIN_NEW_AGENT_SUCCESS]', {
       agentId,
       agentName,
+      agentUsername,
       agentEmail,
+      displayName,
       adminCount: admins.length,
       notificationsCreated: successfulNotifications.length,
       notificationIds: successfulNotifications.map(n => n._id.toString())
@@ -162,10 +180,13 @@ const notifyAdminNewAgent = async (agentId, agentName, agentEmail) => {
 /**
  * Create notification for admin when agent creates a new listing
  */
-const notifyAdminAgentNewListing = async (listingId, agentId, listingTitle) => {
+const notifyAdminAgentNewListing = async (listingId, agentId, listingTitle, propertyId = null) => {
   try {
     const User = require('../models/user.model');
     const admins = await User.find({ role: 'admin' }).select('_id').lean();
+
+    // Use propertyId if provided, otherwise use listingId
+    const displayId = propertyId || listingId;
 
     const notifications = await Promise.all(
       admins.map(admin =>
@@ -173,13 +194,14 @@ const notifyAdminAgentNewListing = async (listingId, agentId, listingTitle) => {
           recipientId: admin._id,
           type: ADMIN_NOTIFICATION_TYPES.AGENT_NEW_LISTING,
           title: 'New Listing Created',
-          message: `Agent has created a new listing: ${listingTitle}`,
+          message: `Agent has created a new listing: ${listingTitle} (ID: ${displayId})`,
           relatedEntity: {
             entityType: 'listing',
             entityId: listingId
           },
           data: {
             listingId,
+            propertyId: displayId,
             agentId,
             listingTitle
           },
@@ -206,10 +228,13 @@ const notifyAdminAgentNewListing = async (listingId, agentId, listingTitle) => {
 /**
  * Create notification for admin when agent updates a listing
  */
-const notifyAdminAgentUpdateListing = async (listingId, agentId, listingTitle) => {
+const notifyAdminAgentUpdateListing = async (listingId, agentId, listingTitle, propertyId = null) => {
   try {
     const User = require('../models/user.model');
     const admins = await User.find({ role: 'admin' }).select('_id').lean();
+
+    // Use propertyId if provided, otherwise use listingId
+    const displayId = propertyId || listingId;
 
     const notifications = await Promise.all(
       admins.map(admin =>
@@ -217,13 +242,14 @@ const notifyAdminAgentUpdateListing = async (listingId, agentId, listingTitle) =
           recipientId: admin._id,
           type: ADMIN_NOTIFICATION_TYPES.AGENT_UPDATE_LISTING,
           title: 'Listing Updated',
-          message: `Agent has updated listing: ${listingTitle}`,
+          message: `Agent has updated listing: ${listingTitle} (ID: ${displayId})`,
           relatedEntity: {
             entityType: 'listing',
             entityId: listingId
           },
           data: {
             listingId,
+            propertyId: displayId,
             agentId,
             listingTitle
           },
@@ -249,10 +275,13 @@ const notifyAdminAgentUpdateListing = async (listingId, agentId, listingTitle) =
 /**
  * Create notification for admin when agent deletes a listing
  */
-const notifyAdminAgentDeleteListing = async (listingId, agentId, listingTitle) => {
+const notifyAdminAgentDeleteListing = async (listingId, agentId, listingTitle, propertyId = null) => {
   try {
     const User = require('../models/user.model');
     const admins = await User.find({ role: 'admin' }).select('_id').lean();
+
+    // Use propertyId if provided, otherwise use listingId
+    const displayId = propertyId || listingId;
 
     const notifications = await Promise.all(
       admins.map(admin =>
@@ -260,13 +289,14 @@ const notifyAdminAgentDeleteListing = async (listingId, agentId, listingTitle) =
           recipientId: admin._id,
           type: ADMIN_NOTIFICATION_TYPES.AGENT_DELETE_LISTING,
           title: 'Listing Deleted',
-          message: `Agent has deleted listing: ${listingTitle}`,
+          message: `Agent has deleted listing: ${listingTitle} (ID: ${displayId})`,
           relatedEntity: {
             entityType: 'listing',
             entityId: listingId
           },
           data: {
             listingId,
+            propertyId: displayId,
             agentId,
             listingTitle
           },
@@ -509,22 +539,80 @@ const notifyAgentListingApproved = async (agentId, listingId, listingTitle) => {
 };
 
 /**
+ * Create notification for agent when listing is rejected
+ */
+const notifyAgentListingRejected = async (agentId, listingId, listingTitle, rejectionReason = null) => {
+  try {
+    let message = `Your listing "${listingTitle}" has been rejected.`;
+    if (rejectionReason) {
+      message += ` Reason: ${rejectionReason}`;
+    } else {
+      message += ' Please review and update your listing details.';
+    }
+
+    const notification = await createNotification({
+      recipientId: agentId,
+      type: AGENT_NOTIFICATION_TYPES.LISTING_REJECTED,
+      title: 'Listing Rejected',
+      message: message,
+      relatedEntity: {
+        entityType: 'listing',
+        entityId: listingId
+      },
+      data: {
+        listingId,
+        listingTitle,
+        rejectionReason
+      },
+      metadata: {
+        source: 'admin'
+      }
+    });
+
+    logger.info('[NOTIFICATION_AGENT_LISTING_REJECTED]', {
+      agentId,
+      listingId
+    });
+
+    return notification;
+  } catch (error) {
+    logger.error('[NOTIFICATION_AGENT_LISTING_REJECTED_ERROR]', error);
+    return null;
+  }
+};
+
+/**
  * Create notification for agent when agent account is approved
  */
 const notifyAgentApproved = async (agentId, agentName) => {
   try {
+    // Get agent user to fetch username if agentName is not provided
+    let agentUsername = null;
+    if (!agentName || agentName.trim().length === 0) {
+      try {
+        const User = require('../models/user.model');
+        const agent = await User.findById(agentId).select('username').lean();
+        agentUsername = agent?.username || null;
+      } catch (err) {
+        logger.warn('[NOTIFICATION_AGENT_APPROVED_FETCH_USERNAME_ERROR]', { agentId, error: err.message });
+      }
+    }
+
+    // Use agentName, fallback to username, then 'Agent'
+    const displayName = agentName || agentUsername || 'Agent';
+
     const notification = await createNotification({
       recipientId: agentId,
       type: AGENT_NOTIFICATION_TYPES.AGENT_APPROVED,
       title: 'Account Approved',
-      message: `Congratulations ${agentName || 'Agent'}! Your agent account has been approved. You can now create listings.`,
+      message: `Congratulations ${displayName}! Your agent account has been approved. You can now create listings.`,
       relatedEntity: {
         entityType: 'user',
         entityId: agentId
       },
       data: {
         agentId,
-        agentName
+        agentName: displayName
       },
       metadata: {
         source: 'admin'
@@ -554,6 +642,7 @@ module.exports = {
   notifyAgentReview,
   notifyAgentMessage,
   notifyAgentListingApproved,
+  notifyAgentListingRejected,
   notifyAgentApproved
 };
 
