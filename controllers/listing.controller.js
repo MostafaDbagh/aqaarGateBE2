@@ -93,6 +93,7 @@ const createListing = async (req, res, next) => {
       agentEmail,
       agentNumber,
       agentWhatsapp,
+      agentFacebook,
       amenities,
       images, // Already processed by uploadListingImagesMiddleware (array of objects)
       imageNames, // Already processed by uploadListingImagesMiddleware (array of strings)
@@ -235,6 +236,7 @@ const createListing = async (req, res, next) => {
       agentEmail: agentEmail ? String(agentEmail) : undefined,
       agentNumber: agentNumber ? String(agentNumber) : undefined,
       agentWhatsapp: agentWhatsapp ? String(agentWhatsapp) : undefined,
+      agentFacebook: req.body.agentFacebook ? String(req.body.agentFacebook).trim() : undefined,
       approvalStatus: approvalStatus || 'pending',
       isSold: toBoolean(isSold, false),
       isDeleted: toBoolean(isDeleted, false),
@@ -570,7 +572,7 @@ const updateListing = async (req, res, next) => {
     
     logger.info(`📋 Update Listing - Final approvalStatus to save: ${updateData.approvalStatus}`);
     
-    // Handle contact information fields (agentName, agentEmail, agentNumber, agentWhatsapp)
+    // Handle contact information fields (agentName, agentEmail, agentNumber, agentWhatsapp, agentFacebook)
     // These can be updated by admin, and can be null to clear the value
     if (updateData.agentName !== undefined) {
       updateData.agentName = updateData.agentName ? String(updateData.agentName).trim() : null;
@@ -583,6 +585,9 @@ const updateListing = async (req, res, next) => {
     }
     if (updateData.agentWhatsapp !== undefined) {
       updateData.agentWhatsapp = updateData.agentWhatsapp ? String(updateData.agentWhatsapp).trim() : null;
+    }
+    if (updateData.agentFacebook !== undefined || req.body.agentFacebook !== undefined) {
+      updateData.agentFacebook = req.body.agentFacebook ? String(req.body.agentFacebook).trim() : null;
     }
 
     // Handle yearBuilt - convert empty string or 0 to null (null means not provided)

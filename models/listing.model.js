@@ -56,6 +56,7 @@ const listingSchema = new mongoose.Schema(
     agentEmail: { type: String, required: false },
     agentNumber: { type: String, required: false },
     agentWhatsapp: { type: String, required: false },
+    agentFacebook: { type: String, required: false }, // Facebook URL (optional, admin only)
     approvalStatus: { 
       type: String, 
       enum: ['pending', 'approved', 'rejected', 'closed'], 
