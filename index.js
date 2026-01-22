@@ -20,6 +20,10 @@ const i18nMiddleware = require('./middleware/i18n');
 
 const app = express();
 
+// Trust proxy - important for getting real client IP behind load balancers/proxies
+// This is especially important for public pages like contact form
+app.set('trust proxy', true);
+
 // Define allowed origins for production environments
 const defaultAllowedOrigins = [
   'https://aqaar-gate-fe.vercel.app',
