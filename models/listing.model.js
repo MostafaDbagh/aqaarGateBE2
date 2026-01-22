@@ -53,6 +53,7 @@ const listingSchema = new mongoose.Schema(
     agent: { type: String, required: true }, // Legacy field - keep for backward compatibility
     agentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', required: false }, // New field for proper reference
     agentName: { type: String, required: false }, // Agent name as string (for admin to specify when posting on behalf of others)
+    agentName_ar: { type: String, required: false }, // Arabic agent name
     agentEmail: { type: String, required: false },
     agentNumber: { type: String, required: false },
     agentWhatsapp: { type: String, required: false },
