@@ -19,6 +19,11 @@ const propertyRentalSchema = new mongoose.Schema(
       required: [true, 'Owner phone is required'],
       trim: true,
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false // Optional for backward compatibility
+    },
     propertyType: {
       type: String,
       required: [true, 'Property type is required'],
@@ -75,6 +80,7 @@ const propertyRentalSchema = new mongoose.Schema(
 // Index for faster queries
 propertyRentalSchema.index({ status: 1, createdAt: -1 });
 propertyRentalSchema.index({ ownerEmail: 1 });
+propertyRentalSchema.index({ userId: 1, createdAt: -1 });
 
 const PropertyRental = mongoose.model('PropertyRental', propertyRentalSchema);
 

@@ -7,6 +7,7 @@ const {
   updatePropertyRentalRequest,
   deletePropertyRentalRequest,
 } = require('../controllers/propertyRental.controller');
+const optionalUserAuth = require('../middleware/optionalUserAuth');
 
 // GET /api/property-rental - Get all property rental requests (with filters and pagination)
 router.get('/', getAllPropertyRentalRequests);
@@ -15,7 +16,7 @@ router.get('/', getAllPropertyRentalRequests);
 router.get('/:id', getPropertyRentalRequestById);
 
 // POST /api/property-rental - Create a new property rental service request
-router.post('/', createPropertyRentalRequest);
+router.post('/', optionalUserAuth, createPropertyRentalRequest);
 
 // PUT /api/property-rental/:id - Update a property rental request
 router.put('/:id', updatePropertyRentalRequest);

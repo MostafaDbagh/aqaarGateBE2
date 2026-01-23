@@ -630,6 +630,104 @@ const notifyAgentApproved = async (agentId, agentName) => {
   }
 };
 
+/**
+ * Create notification for admin when a new future buyer request is created
+ */
+const notifyAdminFutureBuyerRequest = async (futureBuyerId, buyerName, buyerEmail, propertyType, matchedPropertiesCount = 0) => {
+  try {
+    const User = require('../models/user.model');
+    const admins = await User.find({ role: 'admin' }).select('_id email').lean();
+
+    logger.info('[NOTIFICATION_ADMIN_FUTURE_BUYER_START]', {
+      futureBuyerId,
+      buyerName,
+      buyerEmail,
+      propertyType,
+      matchedPropertiesCount,
+      adminCount: admins.length,
+      adminIds: admins.map(a => a._id.toString())
+    });
+
+    if (!admins || admins.length === 0) {
+      logger.warn('[NOTIFICATION_ADMIN_FUTURE_BUYER_NO_ADMINS]', {
+        futureBuyerId,
+        message: 'No admin users found in database'
+      });
+      return [];
+    }
+
+    const notifications = await Promise.all(
+      admins.map(async (admin) => {
+        try {
+          const message = matchedPropertiesCount > 0
+            ? `${buyerName} (${buyerEmail}) submitted a Future Buyer Interest request for ${propertyType}. Found ${matchedPropertiesCount} matching properties.`
+            : `${buyerName} (${buyerEmail}) submitted a Future Buyer Interest request for ${propertyType}. No matching properties found yet.`;
+
+          const notification = await createNotification({
+            recipientId: admin._id,
+            type: ADMIN_NOTIFICATION_TYPES.FUTURE_BUYER_REQUEST,
+            title: 'New Future Buyer Request',
+            message: message,
+            relatedEntity: {
+              entityType: 'futureBuyer',
+              entityId: futureBuyerId
+            },
+            data: {
+              futureBuyerId,
+              buyerName,
+              buyerEmail,
+              propertyType,
+              matchedPropertiesCount
+            },
+            metadata: {
+              source: 'user'
+            }
+          });
+
+          logger.info('[NOTIFICATION_CREATED_FOR_ADMIN_FUTURE_BUYER]', {
+            adminId: admin._id.toString(),
+            adminEmail: admin.email,
+            notificationId: notification._id.toString()
+          });
+
+          return notification;
+        } catch (err) {
+          logger.error('[NOTIFICATION_CREATE_FAILED_FOR_ADMIN_FUTURE_BUYER]', {
+            adminId: admin._id.toString(),
+            adminEmail: admin.email,
+            error: err.message,
+            stack: err.stack
+          });
+          return null;
+        }
+      })
+    );
+
+    const successfulNotifications = notifications.filter(n => n !== null);
+
+    logger.info('[NOTIFICATION_ADMIN_FUTURE_BUYER_SUCCESS]', {
+      futureBuyerId,
+      buyerName,
+      buyerEmail,
+      adminCount: admins.length,
+      notificationsCreated: successfulNotifications.length,
+      notificationIds: successfulNotifications.map(n => n._id.toString())
+    });
+
+    return successfulNotifications;
+  } catch (error) {
+    logger.error('[NOTIFICATION_ADMIN_FUTURE_BUYER_ERROR]', {
+      error: error.message,
+      stack: error.stack,
+      futureBuyerId,
+      buyerName,
+      buyerEmail
+    });
+    // Don't throw - notification failure shouldn't break the flow
+    return [];
+  }
+};
+
 module.exports = {
   createNotification,
   notifyAdminNewAgent,
@@ -638,6 +736,7 @@ module.exports = {
   notifyAdminAgentDeleteListing,
   notifyAdminMessage,
   notifyAdminReview,
+  notifyAdminFutureBuyerRequest,
   notifyAgentListingView,
   notifyAgentReview,
   notifyAgentMessage,

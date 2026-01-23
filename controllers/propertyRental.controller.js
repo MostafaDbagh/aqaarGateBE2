@@ -33,11 +33,23 @@ const createPropertyRentalRequest = async (req, res, next) => {
       return next(errorHandler(400, 'Bedrooms and bathrooms cannot be negative'));
     }
 
+    // Check if user has reached the maximum limit (5 requests per registered user)
+    if (req.user && req.user.id) {
+      const existingRequestsCount = await PropertyRental.countDocuments({ 
+        userId: req.user.id 
+      });
+      
+      if (existingRequestsCount >= 5) {
+        return next(errorHandler(429, 'Maximum limit reached. You can only submit 5 rental service requests.'));
+      }
+    }
+
     // Create property rental request
     const propertyRentalRequest = await PropertyRental.create({
       ownerName,
       ownerEmail,
       ownerPhone,
+      userId: req.user?.id || null, // Add userId if authenticated
       propertyType,
       propertySize,
       bedrooms,
