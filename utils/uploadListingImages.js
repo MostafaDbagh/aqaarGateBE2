@@ -2,6 +2,40 @@ const multer = require('multer');
 const cloudinary = require('../utils/cloudinary');
 const logger = require('../utils/logger');
 
+// Magic bytes (file signatures) for image validation
+// These are the actual bytes at the start of image files
+const IMAGE_SIGNATURES = {
+  'image/jpeg': [
+    [0xFF, 0xD8, 0xFF], // JPEG
+  ],
+  'image/png': [
+    [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], // PNG
+  ],
+  'image/webp': [
+    [0x52, 0x49, 0x46, 0x46], // WebP (RIFF)
+  ],
+};
+
+// Function to validate file signature (magic bytes)
+function validateFileSignature(buffer, mimetype) {
+  if (!buffer || buffer.length < 8) {
+    return false;
+  }
+
+  const signatures = IMAGE_SIGNATURES[mimetype];
+  if (!signatures) {
+    return false;
+  }
+
+  // Check if buffer starts with any of the valid signatures
+  return signatures.some(signature => {
+    if (buffer.length < signature.length) {
+      return false;
+    }
+    return signature.every((byte, index) => buffer[index] === byte);
+  });
+}
+
 // Multer config - memory storage for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({ 
@@ -11,13 +45,16 @@ const upload = multer({
     files: 7 // Maximum 7 images
   },
   fileFilter: (req, file, cb) => {
-    // Accept only image files
+    // First check MIME type
     const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, and WebP images are allowed.'), false);
+    if (!allowedMimes.includes(file.mimetype)) {
+      return cb(new Error('Invalid file type. Only JPEG, PNG, and WebP images are allowed.'), false);
     }
+    
+    // Note: At this point, we don't have the buffer yet
+    // We'll validate the actual file signature after multer processes it
+    // This is done in the uploadListingImages middleware
+    cb(null, true);
   }
 });
 
@@ -157,7 +194,17 @@ const uploadListingImagesMiddleware = async (req, res, next) => {
           continue;
         }
 
-        logger.debug(`📤 Uploading: ${file.originalname} (${file.size} bytes)`);
+        // Validate file signature (magic bytes) to ensure it's actually an image
+        // This prevents malicious files disguised as images
+        if (!validateFileSignature(file.buffer, file.mimetype)) {
+          logger.error(`⚠️ Invalid file signature for ${file.originalname}. File may be malicious or corrupted.`);
+          return res.status(400).json({
+            success: false,
+            message: `Invalid image file: ${file.originalname}. File signature does not match the declared type.`
+          });
+        }
+
+        logger.debug(`📤 Uploading: ${file.originalname} (${file.size} bytes, validated signature)`);
         
         const result = await uploadToCloudinary(file.buffer, file.originalname);
         

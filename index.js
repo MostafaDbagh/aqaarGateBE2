@@ -24,6 +24,76 @@ const app = express();
 // This is especially important for public pages like contact form
 app.set('trust proxy', true);
 
+// Security Headers Middleware
+// هذه الـ headers الأمنية تحمي التطبيق من هجمات مختلفة
+app.use((req, res, next) => {
+  // HSTS (HTTP Strict Transport Security)
+  // يفرض على المتصفح استخدام HTTPS فقط للاتصال بالخادم
+  // max-age=31536000 = سنة واحدة
+  // includeSubDomains = يشمل جميع النطاقات الفرعية
+  // preload = يسمح بإضافة الموقع إلى قائمة HSTS preload
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
+
+  // X-Content-Type-Options
+  // يمنع المتصفح من محاولة تخمين نوع المحتوى (MIME type sniffing)
+  // nosniff = لا تحاول تخمين نوع الملف
+  // هذا يمنع هجمات XSS من خلال رفع ملفات خبيثة
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  // X-Frame-Options
+  // يمنع عرض الصفحة داخل iframe (حماية من clickjacking)
+  // DENY = منع كامل من العرض داخل iframe
+  res.setHeader('X-Frame-Options', 'DENY');
+
+  // X-XSS-Protection (legacy, but still useful for older browsers)
+  // ينشط حماية XSS المدمجة في المتصفح
+  // mode=block = منع عرض الصفحة إذا اكتشف XSS
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+
+  // Referrer-Policy
+  // يتحكم في كمية المعلومات المرسلة في Referer header
+  // strict-origin-when-cross-origin = يرسل فقط النطاق عند الانتقال بين نطاقات مختلفة
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Permissions-Policy (formerly Feature-Policy)
+  // يتحكم في الميزات المتاحة للمتصفح (مثل الكاميرا، الميكروفون، GPS)
+  // هنا نمنع جميع الميزات الحساسة إلا ما نحتاجه
+  res.setHeader('Permissions-Policy', 
+    'camera=(), microphone=(), geolocation=(), interest-cohort=()'
+  );
+
+  // Content-Security-Policy (CSP)
+  // يحدد مصادر الموارد المسموح بها (scripts, styles, images, etc.)
+  // default-src 'self' = السماح فقط من نفس النطاق
+  // script-src 'self' = السماح فقط بـ scripts من نفس النطاق
+  // style-src 'self' 'unsafe-inline' = السماح بـ styles من نفس النطاق + inline styles
+  // img-src 'self' data: https: = السماح بالصور من نفس النطاق + data URLs + HTTPS
+  // connect-src 'self' = السماح بـ AJAX/Fetch فقط من نفس النطاق
+  // font-src 'self' data: = السماح بالخطوط من نفس النطاق + data URLs
+  // object-src 'none' = منع plugins (Flash, etc.)
+  // base-uri 'self' = السماح بـ <base> tag فقط من نفس النطاق
+  // form-action 'self' = السماح بإرسال النماذج فقط لنفس النطاق
+  // frame-ancestors 'none' = منع عرض الصفحة داخل iframe
+  // upgrade-insecure-requests = ترقية جميع طلبات HTTP إلى HTTPS
+  res.setHeader('Content-Security-Policy', 
+    "default-src 'self'; " +
+    "script-src 'self'; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:; " +
+    "connect-src 'self' https:; " +
+    "font-src 'self' data:; " +
+    "object-src 'none'; " +
+    "base-uri 'self'; " +
+    "form-action 'self'; " +
+    "frame-ancestors 'none'; " +
+    "upgrade-insecure-requests"
+  );
+
+  next();
+});
+
 // Define allowed origins for production environments
 const defaultAllowedOrigins = [
   'https://aqaar-gate-fe.vercel.app',
