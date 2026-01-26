@@ -38,7 +38,7 @@ const futureBuyerSchema = new mongoose.Schema(
     },
     
     // Location
-    city: { type: String, required: false },
+    city: { type: String, required: true },
     
     // Property Specifications
     bedrooms: { type: Number, required: false },
@@ -48,7 +48,7 @@ const futureBuyerSchema = new mongoose.Schema(
     status: { 
       type: String, 
       enum: ['sale', 'rent', 'both'],
-      default: 'both'
+      required: true
     },
     
     // Amenities

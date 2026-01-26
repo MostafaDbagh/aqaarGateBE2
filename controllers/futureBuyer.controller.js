@@ -173,9 +173,9 @@ const createFutureBuyer = async (req, res, next) => {
       notes
     } = req.body;
     
-    // Validation
-    if (!name || !email || !phone || !propertyType) {
-      return next(errorHandler(400, 'Name, email, phone, and property type are required'));
+    // Validation - Required fields: name, email, phone, city, propertyType, status
+    if (!name || !email || !phone || !city || !propertyType || !status) {
+      return next(errorHandler(400, 'Name, email, phone, city, property type, and status are required'));
     }
     
     // Validate email format
@@ -220,10 +220,10 @@ const createFutureBuyer = async (req, res, next) => {
       minSize: minSize ? parseFloat(minSize) : undefined,
       maxSize: maxSize ? parseFloat(maxSize) : undefined,
       sizeUnit: sizeUnit || 'sqm',
-      city: city ? city.trim() : undefined,
+      city: city.trim(),
       bedrooms: bedrooms ? parseInt(bedrooms) : undefined,
       bathrooms: bathrooms ? parseInt(bathrooms) : undefined,
-      status: status || 'both',
+      status: status,
       amenities: Array.isArray(amenities) ? amenities : [],
       notes: notes ? notes.trim() : undefined,
       metadata: {
