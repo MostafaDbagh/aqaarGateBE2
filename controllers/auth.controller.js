@@ -1,10 +1,25 @@
 const User = require('../models/user.model.js');
+const OTP = require('../models/otp.model.js');
+const ForgotPasswordVerification = require('../models/forgotPasswordVerification.model.js');
 const bcryptjs = require('bcryptjs');
 const errorHandler = require('../utils/error.js');
 const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
 const { sendOtpEmail } = require('../utils/email');
 const getJWTSecret = require('../utils/jwtSecret');
+
+const OTP_VALID_MS = 5 * 60 * 1000; // 5 minutes
+
+// Normalize email for OTP: spaces in local part → + (handles form encoding where + becomes space)
+function normalizeEmailForOtp(email) {
+  let normalized = (email || '').trim().toLowerCase();
+  const atIdx = normalized.indexOf('@');
+  if (atIdx > 0) {
+    const local = normalized.slice(0, atIdx).replace(/ /g, '+');
+    normalized = local + normalized.slice(atIdx);
+  }
+  return normalized;
+}
 
 const signup = async (req, res, next) => {
   const { 
@@ -297,8 +312,8 @@ const sendOTP = async (req, res, next) => {
       });
     }
 
-    // Normalize email (lowercase, trim)
-    const normalizedEmail = email.trim().toLowerCase();
+    // Normalize email (lowercase, trim; space in local part → + for Gmail-style addresses)
+    const normalizedEmail = normalizeEmailForOtp(email);
     
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -329,23 +344,14 @@ const sendOTP = async (req, res, next) => {
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    // Store OTP in memory (in production, use Redis or database)
-    if (!global.otpStore) {
-      global.otpStore = new Map();
-    }
-    
-    // Delete any existing OTP for this email/type before creating new one
-    const otpKey = `${normalizedEmail}_${type}`;
-    if (global.otpStore.has(otpKey)) {
-      global.otpStore.delete(otpKey);
-    }
-    
-    global.otpStore.set(otpKey, {
-      otp: otp,
-      type: type,
-      timestamp: Date.now(),
-      attempts: 0
+
+    // Replace any existing OTP for this email/type (store in DB for persistence across restarts/instances)
+    await OTP.deleteOne({ email: normalizedEmail, type });
+    await OTP.create({
+      email: normalizedEmail,
+      type,
+      otp,
+      attempts: 0,
     });
 
     // Send response immediately, then send email in background (non-blocking)
@@ -504,7 +510,7 @@ const verifyOTP = async (req, res, next) => {
   try {
     const { email, otp, type = 'signup' } = req.body;
     
-    if (!email || !otp) {
+    if (!email || otp === undefined || otp === null || otp === '') {
       return res.status(400).json({
         success: false,
         message: 'Email and OTP are required',
@@ -512,11 +518,14 @@ const verifyOTP = async (req, res, next) => {
       });
     }
 
-    // Normalize email
-    const normalizedEmail = email.trim().toLowerCase();
+    // Normalize OTP to string so comparison works whether client sends "123456" or 123456
+    const otpStr = String(otp).trim();
+
+    // Normalize email (same as sendOTP so lookup matches; space in local part → +)
+    const normalizedEmail = normalizeEmailForOtp(email);
     
     // Validate OTP format (must be exactly 6 digits)
-    if (!/^\d{6}$/.test(otp)) {
+    if (!/^\d{6}$/.test(otpStr)) {
       return res.status(400).json({
         success: false,
         message: 'OTP must be exactly 6 digits',
@@ -532,10 +541,9 @@ const verifyOTP = async (req, res, next) => {
       });
     }
 
-    const otpKey = `${normalizedEmail}_${type}`;
-    
-    // Check if OTP exists in store
-    if (!global.otpStore || !global.otpStore.has(otpKey)) {
+    // Find OTP in DB (persists across restarts and multiple server instances)
+    const otpDoc = await OTP.findOne({ email: normalizedEmail, type });
+    if (!otpDoc) {
       return res.status(400).json({
         success: false,
         message: 'OTP not found or expired',
@@ -543,13 +551,12 @@ const verifyOTP = async (req, res, next) => {
       });
     }
 
-    const otpData = global.otpStore.get(otpKey);
-    
-    // Check if OTP is expired (5 minutes)
+    const attempts = Number(otpDoc.attempts) || 0;
     const now = Date.now();
-    const otpAge = now - otpData.timestamp;
-    if (otpAge > 5 * 60 * 1000) { // 5 minutes
-      global.otpStore.delete(otpKey);
+    const otpAge = now - otpDoc.createdAt.getTime();
+
+    if (otpAge > OTP_VALID_MS) {
+      await OTP.deleteOne({ _id: otpDoc._id });
       return res.status(400).json({
         success: false,
         message: 'OTP has expired',
@@ -557,20 +564,22 @@ const verifyOTP = async (req, res, next) => {
       });
     }
 
-    // Check attempts (max 3 attempts)
-    if (otpData.attempts >= 3) {
-      global.otpStore.delete(otpKey);
-      return res.status(400).json({
-        success: false,
-        message: 'Too many attempts. Please request a new OTP',
-        error: 'TOO_MANY_ATTEMPTS'
-      });
-    }
-
-    // Verify OTP
-    if (otpData.otp !== otp) {
-      otpData.attempts++;
-      global.otpStore.set(otpKey, otpData);
+    // Verify OTP first: if correct, always accept (even after wrong attempts)
+    const storedOtp = String(otpDoc.otp);
+    if (storedOtp === otpStr) {
+      // Correct OTP — accept and continue to success below
+    } else {
+      const newAttempts = attempts + 1;
+      otpDoc.attempts = newAttempts;
+      await otpDoc.save();
+      if (newAttempts >= 5) {
+        await OTP.deleteOne({ _id: otpDoc._id });
+        return res.status(400).json({
+          success: false,
+          message: 'Too many attempts. Please request a new OTP',
+          error: 'TOO_MANY_ATTEMPTS'
+        });
+      }
       return res.status(400).json({
         success: false,
         message: 'Invalid OTP',
@@ -578,30 +587,17 @@ const verifyOTP = async (req, res, next) => {
       });
     }
 
-    // OTP is valid
-    // For forgot_password, create a verified flag before deleting OTP
-    // This allows resetPassword to verify that OTP was checked
+    // OTP is valid — for forgot_password, create DB record so resetPassword can verify
     if (type === 'forgot_password') {
-      // Create a verified store if it doesn't exist
-      if (!global.verifiedStore) {
-        global.verifiedStore = new Map();
-      }
-      // Store verification with expiration (10 minutes to reset password)
-      const verifiedKey = `${normalizedEmail}_forgot_password_verified`;
-      // Delete any existing verified flag for this email
-      if (global.verifiedStore.has(verifiedKey)) {
-        global.verifiedStore.delete(verifiedKey);
-      }
-      global.verifiedStore.set(verifiedKey, {
+      await ForgotPasswordVerification.deleteMany({ email: normalizedEmail });
+      await ForgotPasswordVerification.create({
         email: normalizedEmail,
-        timestamp: Date.now(),
-        expiresAt: Date.now() + (10 * 60 * 1000) // 10 minutes
+        expiresAt: new Date(now + 10 * 60 * 1000), // 10 minutes to complete reset
       });
       logger.info('OTP verified for password reset', { email: normalizedEmail });
     }
-    
-    // Remove OTP from store after verification
-    global.otpStore.delete(otpKey);
+
+    await OTP.deleteOne({ _id: otpDoc._id });
 
     res.status(200).json({
       success: true,
@@ -626,8 +622,8 @@ const resetPassword = async (req, res, next) => {
       });
     }
 
-    // Normalize email (lowercase, trim)
-    const normalizedEmail = email.trim().toLowerCase();
+    // Normalize email (same as OTP flow: space in local part → +)
+    const normalizedEmail = normalizeEmailForOtp(email);
 
     // Validate password length
     if (newPassword.length < 6) {
@@ -638,12 +634,9 @@ const resetPassword = async (req, res, next) => {
       });
     }
 
-    // Check if OTP was verified for this email
-    const otpKey = `${normalizedEmail}_forgot_password`;
-    const verifiedKey = `${normalizedEmail}_forgot_password_verified`;
-    
-    // Check if OTP still exists (means it wasn't verified)
-    if (global.otpStore && global.otpStore.has(otpKey)) {
+    // Check that OTP was verified for this email (forgot_password verification in DB)
+    const verification = await ForgotPasswordVerification.findOne({ email: normalizedEmail });
+    if (!verification) {
       return res.status(400).json({
         success: false,
         message: 'Please verify OTP first before resetting password',
@@ -651,20 +644,9 @@ const resetPassword = async (req, res, next) => {
       });
     }
 
-    // Check if email was verified (using verified store)
-    if (!global.verifiedStore || !global.verifiedStore.has(verifiedKey)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please verify OTP first before resetting password',
-        error: 'OTP_NOT_VERIFIED'
-      });
-    }
-
-    // Check if verification is still valid (not expired)
-    const verifiedData = global.verifiedStore.get(verifiedKey);
     const now = Date.now();
-    if (now > verifiedData.expiresAt) {
-      global.verifiedStore.delete(verifiedKey);
+    if (now > verification.expiresAt.getTime()) {
+      await ForgotPasswordVerification.deleteOne({ _id: verification._id });
       return res.status(400).json({
         success: false,
         message: 'OTP verification has expired. Please request a new OTP',
@@ -672,8 +654,7 @@ const resetPassword = async (req, res, next) => {
       });
     }
 
-    // Verification is valid, remove it after password reset
-    global.verifiedStore.delete(verifiedKey);
+    await ForgotPasswordVerification.deleteOne({ _id: verification._id });
 
     // Find user and update password
     const user = await User.findOne({ email: normalizedEmail });
