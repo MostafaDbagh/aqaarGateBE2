@@ -223,6 +223,7 @@ const createListing = async (req, res, next) => {
       garageSize: garages && garageSize ? toNumber(garageSize) : 0,
       yearBuilt: (yearBuilt && yearBuilt !== 0 && yearBuilt !== '0' && yearBuilt.toString().trim() !== '') ? toNumber(yearBuilt) : null,
       floor: req.body.floor ? toNumber(req.body.floor) : undefined,
+      numberOfFloors: req.body.numberOfFloors ? toNumber(req.body.numberOfFloors) : undefined,
       amenities: toArray(amenities),
       address: String(address),
       address_ar: req.body.address_ar ? String(req.body.address_ar) : undefined,
@@ -602,6 +603,16 @@ const updateListing = async (req, res, next) => {
       } else {
         const yearNum = toNumber(updateData.yearBuilt);
         updateData.yearBuilt = (isNaN(yearNum) || yearNum === 0) ? null : yearNum;
+      }
+    }
+
+    // Handle numberOfFloors (for Building type)
+    if (updateData.numberOfFloors !== undefined) {
+      if (updateData.numberOfFloors === '' || updateData.numberOfFloors === null || updateData.numberOfFloors === 0 || updateData.numberOfFloors === '0' || (typeof updateData.numberOfFloors === 'string' && updateData.numberOfFloors.trim() === '')) {
+        updateData.numberOfFloors = null;
+      } else {
+        const num = toNumber(updateData.numberOfFloors);
+        updateData.numberOfFloors = (isNaN(num) || num < 1) ? null : num;
       }
     }
 

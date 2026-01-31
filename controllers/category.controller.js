@@ -33,6 +33,7 @@ const getCategoryStats = async (req, res, next) => {
     const propertyTypeMapping = {
       'Apartment': { patterns: ['apartment'], displayName: 'Apartment' },
       'Villa/farms': { patterns: ['villa', 'farm', 'villa/farms'], displayName: 'Villa/farms' },
+      'Building': { patterns: ['building'], displayName: 'Building' },
       'Office': { patterns: ['office'], displayName: 'Office' },
       'Commercial': { patterns: ['commercial'], displayName: 'Commercial' },
       'Land': { patterns: ['land', 'land/plot'], displayName: 'Land/Plot' },

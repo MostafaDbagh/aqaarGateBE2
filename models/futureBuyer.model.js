@@ -16,7 +16,7 @@ const futureBuyerSchema = new mongoose.Schema(
     propertyType: { 
       type: String, 
       required: true,
-      enum: ['Apartment', 'Villa', 'Land', 'Holiday Home', 'Office', 'Commercial']
+      enum: ['Apartment', 'Villa', 'Land', 'Holiday Home', 'Office', 'Commercial', 'Building']
     },
     
     // Price Range

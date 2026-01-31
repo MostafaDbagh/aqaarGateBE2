@@ -14,7 +14,8 @@ const PROPERTY_TYPES = [
   'Office',
   'Land',
   'Commercial',
-  'Holiday Home'
+  'Holiday Home',
+  'Building'
 ];
 
 // Available amenities in the system
@@ -155,7 +156,7 @@ Only when combined with "عطلة", "عطلات", "سياحي", "إيجار قص
 
 Your task is to extract structured search parameters from the user's query. Return ONLY a valid JSON object with the following structure:
 {
-  "propertyType": "Apartment" | "Villa" | "Villa/farms" | "Office" | "Land" | "Commercial" | "Holiday Home" | null,
+  "propertyType": "Apartment" | "Villa" | "Villa/farms" | "Office" | "Land" | "Commercial" | "Holiday Home" | "Building" | null,
   "bedrooms": number | null,
   "bathrooms": number | null,
   "sizeMin": number | null,
@@ -355,6 +356,13 @@ const normalizeExtractedParams = (params) => {
              propType === 'أرض للبناء' || propType === 'ارض للبناء' ||
              propType === 'قطعة بناء' || propType === 'قطع بناء') {
       normalized.propertyType = 'Land';
+    }
+    // Map building (whole building) to Building - must come after Land so "building plot" stays Land
+    else if (propType === 'building' || propType === 'buildings' || propType === 'whole building' || propType === 'entire building' ||
+             propType === 'multi-floor building' || propType === 'multi storey' || propType === 'multi storey building' ||
+             propType === 'بناء كامل' || propType === 'بناء' || propType === 'مبنى' || propType === 'مباني' ||
+             propType === 'عمارة' || propType === 'عمارات') {
+      normalized.propertyType = 'Building';
     } else {
       // Try exact match
       const matched = PROPERTY_TYPES.find(

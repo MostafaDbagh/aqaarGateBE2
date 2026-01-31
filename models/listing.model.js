@@ -38,7 +38,8 @@ const listingSchema = new mongoose.Schema(
     garages: { type: Boolean, required: true },
     garageSize: { type: Number },
     yearBuilt: { type: Number },
-    floor: { type: Number }, // Floor number
+    floor: { type: Number }, // Floor number (e.g. unit on which floor)
+    numberOfFloors: { type: Number }, // For propertyType "Building" - total number of floors
     amenities: [{ type: String }],  
 //////property location//////////
     address: { type: String, required: true },

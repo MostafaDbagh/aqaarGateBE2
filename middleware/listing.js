@@ -18,7 +18,8 @@ const convertArabicPropertyType = (arabicType) => {
     'أرض': 'Land',
     'أرض/قطعة': 'Land/Plot',
     'بيت عطلة': 'Holiday Home',
-    'بيوت عطلة': 'Holiday Homes'
+    'بيوت عطلة': 'Holiday Homes',
+    'بناء كامل': 'Building'
   };
   
   return propertyTypeMap[arabicType] || arabicType;
