@@ -112,25 +112,9 @@ const getMessagesByAgent = async (req, res, next) => {
     }
 
     // Get messages with pagination and populate property details
-    // Filter out messages for deleted listings using aggregation
+    // Include ALL messages (even for deleted listings) so all messages appear
     const messagesAggregation = await Message.aggregate([
       { $match: filter },
-      {
-        $lookup: {
-          from: 'listings',
-          localField: 'propertyId',
-          foreignField: '_id',
-          as: 'property'
-        }
-      },
-      {
-        $match: {
-          $or: [
-            { 'property.isDeleted': { $ne: true } },
-            { 'property': { $size: 0 } } // Include messages with no property (shouldn't happen, but safe)
-          ]
-        }
-      },
       { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: limit },
@@ -188,48 +172,16 @@ const getMessagesByAgent = async (req, res, next) => {
       return messageObj;
     });
 
-    // Get total count for pagination (excluding deleted listings)
+    // Get total count for pagination (include all messages)
     const totalAggregation = await Message.aggregate([
       { $match: filter },
-      {
-        $lookup: {
-          from: 'listings',
-          localField: 'propertyId',
-          foreignField: '_id',
-          as: 'property'
-        }
-      },
-      {
-        $match: {
-          $or: [
-            { 'property.isDeleted': { $ne: true } },
-            { 'property': { $size: 0 } }
-          ]
-        }
-      },
       { $count: 'total' }
     ]);
     const total = totalAggregation[0]?.total || 0;
 
-    // Get statistics - use same filter logic (excluding deleted listings)
+    // Get statistics (include all messages)
     const stats = await Message.aggregate([
       { $match: filter },
-      {
-        $lookup: {
-          from: 'listings',
-          localField: 'propertyId',
-          foreignField: '_id',
-          as: 'property'
-        }
-      },
-      {
-        $match: {
-          $or: [
-            { 'property.isDeleted': { $ne: true } },
-            { 'property': { $size: 0 } }
-          ]
-        }
-      },
       {
         $group: {
           _id: '$status',
