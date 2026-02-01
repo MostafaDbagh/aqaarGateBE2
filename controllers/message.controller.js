@@ -163,6 +163,7 @@ const getMessagesByAgent = async (req, res, next) => {
           propertyId: messageObj.propertyId.propertyId,
           propertyKeyword: messageObj.propertyId.propertyKeyword,
           propertyPrice: messageObj.propertyId.propertyPrice,
+          currency: messageObj.propertyId.currency,
           status: messageObj.propertyId.status,
           propertyType: messageObj.propertyId.propertyType,
           images: messageObj.propertyId.images,
@@ -238,7 +239,7 @@ const getMessageById = async (req, res, next) => {
   try {
     const messageId = req.params.messageId;
     const message = await Message.findById(messageId)
-      .populate('propertyId', 'propertyId propertyKeyword propertyPrice status propertyType images address')
+      .populate('propertyId', 'propertyId propertyKeyword propertyPrice currency status propertyType images address')
       .populate('agentId', 'username email fullName');
 
     if (!message) {
@@ -299,7 +300,7 @@ const replyToMessage = async (req, res, next) => {
         respondedAt: new Date()
       },
       { new: true }
-    ).populate('propertyId', 'propertyId propertyKeyword propertyPrice status propertyType');
+    ).populate('propertyId', 'propertyId propertyKeyword propertyPrice currency status propertyType');
 
     if (!message) {
       return next(errorHandler(404, 'Message not found'));
@@ -434,7 +435,7 @@ const createMessage = async (req, res, next) => {
     await newMessage.save();
 
     // Populate property details for response
-    await newMessage.populate('propertyId', 'propertyId propertyKeyword propertyPrice status propertyType');
+    await newMessage.populate('propertyId', 'propertyId propertyKeyword propertyPrice currency status propertyType');
 
     // Notify agent about new message
     try {
