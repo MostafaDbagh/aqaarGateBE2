@@ -29,6 +29,7 @@ const {
   // Dashboard
   getDashboardStats
 } = require('../controllers/admin.controller');
+const careerController = require('../controllers/career.controller');
 
 // All routes require admin authentication
 router.use(adminAuth);
@@ -68,6 +69,12 @@ router.get('/agents', getAllAgents);
 router.put('/agents/:id/block', blockAgent);
 router.put('/agents/:id/unblock', unblockAgent);
 router.delete('/agents/:id', deleteAgent);
+
+// Careers (admin CRUD)
+router.get('/careers', careerController.getAdminCareers);
+router.post('/careers', careerController.createCareer);
+router.put('/careers/:id', careerController.updateCareer);
+router.delete('/careers/:id', careerController.deleteCareer);
 
 module.exports = router;
 
