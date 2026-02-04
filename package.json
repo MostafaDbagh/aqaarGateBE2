@@ -21,7 +21,8 @@
     "reset:db": "node scripts/resetDatabaseKeepAdmin.js",
     "create:admin": "node scripts/create-admin-main.js",
     "create:admin:dev": "node scripts/create-admin-dev.js",
-    "test:otp": "node scripts/test-otp-scenarios.js"
+    "test:otp": "node scripts/test-otp-scenarios.js",
+    "test:update-images": "node scripts/test-update-listing-images.js"
   },
   "author": "",
   "license": "ISC",

@@ -82,7 +82,7 @@ const listingSchema = new mongoose.Schema(
       type: [String], 
       required: false,
       default: [],
-      maxlength: 7 // Maximum 7 images as per requirement
+      maxlength: 15 // Maximum 15 images
     },         
     images: [
       {

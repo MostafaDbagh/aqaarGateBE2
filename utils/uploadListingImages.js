@@ -42,7 +42,7 @@ const upload = multer({
   storage,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB per file
-    files: 7 // Maximum 7 images
+    files: 15 // Maximum 15 images
   },
   fileFilter: (req, file, cb) => {
     // First check MIME type
@@ -71,7 +71,7 @@ const handleMulterError = (err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_COUNT') {
       return res.status(400).json({
         success: false,
-        message: 'Too many files. Maximum 7 images allowed.'
+        message: 'Too many files. Maximum 15 images allowed.'
       });
     }
     return res.status(400).json({
@@ -130,11 +130,11 @@ const uploadListingImages = (req, res, next) => {
       req.body = {};
     }
     
-    // Filter files to only include 'images' field and limit to 7
+    // Filter files to only include 'images' field and limit to 15
     if (req.files && Array.isArray(req.files)) {
       req.files = req.files
         .filter(file => file.fieldname === 'images')
-        .slice(0, 7); // Limit to 7 images
+        .slice(0, 15); // Limit to 15 images
     } else {
       req.files = [];
     }

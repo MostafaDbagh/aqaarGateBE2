@@ -1661,10 +1661,96 @@ const importProperties = async (req, res, next) => {
   }
 };
 
+/**
+ * Update listing images - add new and/or delete existing
+ * Route uses: uploadListingImages, uploadListingImagesMiddleware (uploads new files to Cloudinary)
+ * Expects multipart/form-data: images (files), imagesToDelete (JSON string of publicIds array)
+ */
+const updateListingImages = async (req, res, next) => {
+  try {
+    const cloudinary = require('../utils/cloudinary');
+    const listing = await Listing.findById(req.params.id);
+    if (!listing) {
+      return next(errorHandler(404, 'Listing not found!'));
+    }
+    if (!req.user) {
+      return next(errorHandler(401, 'You must be logged in to update listings!'));
+    }
+    const userId = req.user.id || req.user._id?.toString();
+    const listingAgentId = listing.agentId?.toString();
+    if (userId !== listingAgentId && req.user.role !== 'admin') {
+      return next(errorHandler(403, 'You can only update your own listings!'));
+    }
+
+    let currentImages = Array.isArray(listing.images) ? [...listing.images] : [];
+    let imageNames = Array.isArray(listing.imageNames) ? [...listing.imageNames] : [];
+
+    // Parse imagesToDelete (publicIds or URLs to remove)
+    const imagesToDelete = (() => {
+      try {
+        const raw = req.body?.imagesToDelete;
+        if (!raw) return [];
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    // Remove deleted images from DB and Cloudinary
+    for (const idOrUrl of imagesToDelete) {
+      if (!idOrUrl || typeof idOrUrl !== 'string') continue;
+      const idx = currentImages.findIndex(img => {
+        if (!img) return false;
+        if (img.publicId === idOrUrl) return true;
+        const url = img.url || img.src || (typeof img === 'string' ? img : '');
+        return url === idOrUrl;
+      });
+      if (idx >= 0) {
+        const img = currentImages[idx];
+        const publicId = img?.publicId;
+        currentImages.splice(idx, 1);
+        if (imageNames[idx] !== undefined) imageNames.splice(idx, 1);
+        if (publicId) {
+          try {
+            await cloudinary.uploader.destroy(publicId, { invalidate: true });
+          } catch (err) {
+            logger.warn('Cloudinary destroy failed for', publicId, err.message);
+          }
+        }
+      }
+    }
+
+    // Append newly uploaded images (from uploadListingImagesMiddleware)
+    const newImages = req.body?.images || [];
+    const newNames = req.body?.imageNames || [];
+    if (Array.isArray(newImages) && newImages.length > 0) {
+      currentImages.push(...newImages);
+      imageNames.push(...(Array.isArray(newNames) ? newNames : []));
+    }
+
+    // Enforce max 15 images
+    const maxImages = 15;
+    if (currentImages.length > maxImages) {
+      currentImages = currentImages.slice(0, maxImages);
+      imageNames = imageNames.slice(0, maxImages);
+    }
+
+    listing.images = currentImages;
+    listing.imageNames = imageNames;
+    await listing.save();
+
+    res.status(200).json(listing);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createListing,
   deleteListing,
   updateListing,
+  updateListingImages,
   getListingById,
   getListingImages,
   getListingsByAgent,
