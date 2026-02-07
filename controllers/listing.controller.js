@@ -1072,23 +1072,18 @@ const aiSearch = async (req, res, next) => {
     try {
       // Use rule-based parser (no external API needed - works in Syria)
       extractedParams = parseQuery(query);
-      
-      // Optional: Try OpenAI if available (for better accuracy)
-      // Uncomment below if you have OpenAI API key and want to use it
-      /*
+
+      // Use OpenAI when available (AI takes precedence over rule-based)
       if (process.env.OPENAI_API_KEY) {
         try {
           const { parseAIQuery } = require('../utils/aiSearchParser');
           const aiParams = await parseAIQuery(query);
-          // Merge AI results with rule-based (AI takes precedence)
           extractedParams = { ...extractedParams, ...aiParams };
           logger.info('✅ Using OpenAI for enhanced parsing');
         } catch (aiError) {
           logger.warn('OpenAI parsing failed, using rule-based only:', aiError.message);
-          // Continue with rule-based parser
         }
       }
-      */
     } catch (parseError) {
       logger.error('Query parsing error:', parseError);
       return next(errorHandler(500, `Query parsing failed: ${parseError.message}`));
@@ -1156,7 +1151,12 @@ const aiSearch = async (req, res, next) => {
 
     // Apply property type filter
     if (extractedParams.propertyType) {
-      filters.propertyType = extractedParams.propertyType;
+      // Villa/farms and Villa are related: include both when user searches for villa
+      if (extractedParams.propertyType === 'Villa/farms') {
+        filters.propertyType = { $in: ['Villa', 'Villa/farms'] };
+      } else {
+        filters.propertyType = extractedParams.propertyType;
+      }
     }
 
     // Apply numeric filters

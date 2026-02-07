@@ -128,7 +128,7 @@ Available Amenities: ${AMENITIES.join(', ')}
 Available Cities: ${SYRIAN_CITIES.join(', ')}
 
 IMPORTANT PROPERTY TYPE MAPPING:
-- "villa", "villas", "farm", "farms" (English) → "Villa/farms"
+- "villa", "villas", "farm", "farms", "frams" (typo) (English) → "Villa/farms"
 - "فيلا", "فيلات", "فلل", "مزرعة", "مزارع" (Arabic) → "Villa/farms"
 All these terms mean the same thing and should map to "Villa/farms"
 
@@ -136,7 +136,7 @@ All these terms mean the same thing and should map to "Villa/farms"
 - "شقة", "شقق", "شقة سكنية", "شقق سكنية", "عقار سكني", "عقارات سكنية", "وحدة سكنية", "وحدات سكنية", "سكن", "مساكن", "منزل", "منازل", "بيت", "بيوت", "مسكن", "مساكن", "سكني", "سكنية" (Arabic) → "Apartment"
 CRITICAL: "بيت" or "منزل" alone (without holiday/tourist context) → "Apartment", NOT "Holiday Home"
 
-- "house", "houses", "residential house", "residential houses", "family house", "family houses" (English) → "House"
+- "house", "houses", "residential house", "residential houses", "family house", "family houses", "townhouse", "townhouses" (English) → "House"
 - "منزل", "منازل", "بيت", "بيوت" (when context suggests standalone house, not apartment) (Arabic) → "House"
 
 - "office", "offices", "business office", "business offices", "workspace", "workspaces", "workplace", "workplaces", "professional office", "professional offices", "office space", "office spaces" (English) → "Office"
@@ -185,7 +185,7 @@ Rules:
 5. For city, match to one of the Syrian cities (case-insensitive, handle variations)
 6. For amenities, extract and map to available amenities
 7. For "view" mentions, extract view type if specified (sea, mountain, open, or just "view")
-8. For status, look for "rent", "rental", "for rent", "sale", "buy", "for sale"
+8. For status: "rent"/"rental"/"for rent"/"للإيجار"/"للايجار" → "rent"; "sale"/"buy"/"for sale"/"للبيع" → "sale"
 9. Set null for fields that cannot be determined from the query
 10. For keywords, extract descriptive words that might be in property descriptions (e.g., "nice view", "spacious", "modern")
 11. Return ONLY the JSON object, no additional text or explanation
@@ -198,7 +198,16 @@ Query: "Show me a villa with 3 bedrooms and sea view in Aleppo"
 Response: {"propertyType": "Villa", "bedrooms": 3, "bathrooms": null, "amenities": [], "keywords": ["sea view"], "viewType": "sea view", "status": null, "city": "Aleppo", "neighborhood": null, "furnished": null, "garages": null, "sizeMin": null, "sizeMax": null, "priceMin": null, "priceMax": null}
 
 Query: "Find apartments for rent in Damascus with 2 bathrooms"
-Response: {"propertyType": "Apartment", "bedrooms": null, "bathrooms": 2, "amenities": [], "keywords": [], "viewType": null, "status": "rent", "city": "Damascus", "neighborhood": null, "furnished": null, "garages": null, "sizeMin": null, "sizeMax": null, "priceMin": null, "priceMax": null}`;
+Response: {"propertyType": "Apartment", "bedrooms": null, "bathrooms": 2, "amenities": [], "keywords": [], "viewType": null, "status": "rent", "city": "Damascus", "neighborhood": null, "furnished": null, "garages": null, "sizeMin": null, "sizeMax": null, "priceMin": null, "priceMax": null}
+
+Query: "villa for sale in homs"
+Response: {"propertyType": "Villa/farms", "bedrooms": null, "bathrooms": null, "amenities": [], "keywords": [], "viewType": null, "status": "sale", "city": "Homs", "neighborhood": null, "furnished": null, "garages": null, "sizeMin": null, "sizeMax": null, "priceMin": null, "priceMax": null}
+
+Query: "villa farms"
+Response: {"propertyType": "Villa/farms", "bedrooms": null, "bathrooms": null, "amenities": [], "keywords": [], "viewType": null, "status": null, "city": null, "neighborhood": null, "furnished": null, "garages": null, "sizeMin": null, "sizeMax": null, "priceMin": null, "priceMax": null}
+
+Query: "فلل مزارع مزرعة"
+Response: {"propertyType": "Villa/farms", "bedrooms": null, "bathrooms": null, "amenities": [], "keywords": [], "viewType": null, "status": null, "city": null, "neighborhood": null, "furnished": null, "garages": null, "sizeMin": null, "sizeMax": null, "priceMin": null, "priceMax": null}`;
 
     logger.info(`🤖 Parsing AI query: "${query}"`);
 
@@ -281,7 +290,7 @@ const normalizeExtractedParams = (params) => {
     const propType = params.propertyType.trim().toLowerCase();
     
     // Map villa/farm variations to Villa/farms
-    if (propType === 'villa' || propType === 'villas' || propType === 'farm' || propType === 'farms' ||
+    if (propType === 'villa' || propType === 'villas' || propType === 'farm' || propType === 'farms' || propType === 'frams' ||
         propType === 'farmhouse' || propType === 'farmhouses' ||
         propType === 'فيلا' || propType === 'فيلات' || propType === 'فلل' ||
         propType === 'مزرعة' || propType === 'مزارع' ||
@@ -305,7 +314,7 @@ const normalizeExtractedParams = (params) => {
     }
     // Map house variations to House
     else if (propType === 'house' || propType === 'houses' || propType === 'residential house' || propType === 'residential houses' ||
-             propType === 'family house' || propType === 'family houses') {
+             propType === 'family house' || propType === 'family houses' || propType === 'townhouse' || propType === 'townhouses') {
       normalized.propertyType = 'House';
     }
     // Map office variations to Office

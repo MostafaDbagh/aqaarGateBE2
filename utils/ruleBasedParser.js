@@ -166,14 +166,16 @@ const parseQuery = (query) => {
       extractedParams.propertyType = 'Holiday Home';
     }
     // Then check for "Villa/farms" variations (before checking individual "Villa")
-    else if (normalizedQuery.match(/\b(villa|villas|farm|farms)\b/) || 
+    // Include "frams" typo for farms
+    else if (normalizedQuery.match(/\b(villa|villas|farm|farms|frams)\b/) ||
         query.includes('فيلا') || query.includes('فيلات') || query.includes('فلل') ||
         query.includes('مزرعة') || query.includes('مزارع')) {
       extractedParams.propertyType = 'Villa/farms';
     }
     // Then check for "House" variations (before Apartment to prioritize "منزل" as House)
     // NOTE: "منازل" (plural) refers to Apartment, not House
-    else if (normalizedQuery.match(/\b(house|houses|residential house|residential houses|family house|family houses)\b/) ||
+    // townhouse, townhouses = multi-level attached house
+    else if (normalizedQuery.match(/\b(house|houses|residential house|residential houses|family house|family houses|townhouse|townhouses)\b/) ||
              query.includes('منزل')) {
       extractedParams.propertyType = 'House';
     }
@@ -217,12 +219,12 @@ const parseQuery = (query) => {
       else if (normalizedQuery.match(/\b(apt|apartment|apartments|flat|flats|unit|units|residential unit|residential units|condo|condos|condominium|condominiums|residence|residences|dwelling|dwellings)\b/)) {
         extractedParams.propertyType = 'Apartment';
       } 
-      // Villa/farms variations
-      else if (normalizedQuery.match(/\b(villa|villas|farm|farms|farmhouse|farmhouses)\b/)) {
+      // Villa/farms variations (include "frams" typo for farms)
+      else if (normalizedQuery.match(/\b(villa|villas|farm|farms|frams|farmhouse|farmhouses)\b/)) {
         extractedParams.propertyType = 'Villa/farms';
-      } 
-      // House variations
-      else if (normalizedQuery.match(/\b(house|houses|residential house|residential houses|family house|family houses)\b/)) {
+      }
+      // House variations (townhouse = multi-level attached house)
+      else if (normalizedQuery.match(/\b(house|houses|residential house|residential houses|family house|family houses|townhouse|townhouses)\b/)) {
         extractedParams.propertyType = 'House';
       } 
       // Commercial variations
