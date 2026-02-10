@@ -22,7 +22,8 @@
     "create:admin": "node scripts/create-admin-main.js",
     "create:admin:dev": "node scripts/create-admin-dev.js",
     "test:otp": "node scripts/test-otp-scenarios.js",
-    "test:update-images": "node scripts/test-update-listing-images.js"
+    "test:update-images": "node scripts/test-update-listing-images.js",
+    "test:arabic-english": "node scripts/test-arabic-english-same-results.js"
   },
   "author": "",
   "license": "ISC",

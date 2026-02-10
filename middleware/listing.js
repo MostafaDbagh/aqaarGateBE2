@@ -65,6 +65,32 @@ const convertArabicCity = (arabicCity) => {
   return arabicCity;
 };
 
+// Arabic → English for keyword search (backend stores English in propertyKeyword/propertyDesc)
+const ARABIC_TO_ENGLISH_KEYWORD = {
+  'شقة': 'Apartment', 'شقق': 'Apartment', 'شقة سكنية': 'Apartment', 'شقق سكنية': 'Apartment',
+  'فيلا': 'Villa', 'منزل': 'House', 'أرض': 'Land', 'مكتب': 'Office', 'تجاري': 'Commercial',
+  'للبيع': 'sale', 'للإيجار': 'rent', 'بيع': 'sale', 'إيجار': 'rent',
+  'سوريا': 'Syria', 'سورية': 'Syria',
+  'دمشق': 'Damascus', 'حلب': 'Aleppo', 'حمص': 'Homs', 'اللاذقية': 'Latakia', 'طرطوس': 'Tartus',
+  'درعا': 'Daraa', 'حماة': 'Hama', 'إدلب': 'Idlib', 'دير الزور': 'Deir ez-Zur', 'ديرالزور': 'Deir ez-Zur',
+  'السويداء': 'As-Suwayda', 'الرقة': 'Raqqah'
+};
+
+const hasArabic = (str) => /[\u0600-\u06FF]/.test(str || '');
+
+const convertArabicKeywordForSearch = (rawKeyword) => {
+  if (!rawKeyword || typeof rawKeyword !== 'string') return rawKeyword;
+  const trimmed = rawKeyword.trim();
+  if (!trimmed) return trimmed;
+  if (!hasArabic(trimmed)) return trimmed;
+  const tokens = trimmed.split(/[\s,،]+/).map((t) => t.trim()).filter(Boolean);
+  const translated = tokens
+    .map((t) => ARABIC_TO_ENGLISH_KEYWORD[t] || ARABIC_TO_ENGLISH_KEYWORD[t.replace(/[،,]/g, '')])
+    .filter(Boolean);
+  if (translated.length > 0) return translated.join(' ');
+  return trimmed;
+};
+
 const filterListings = async (req, res, next) => {
   try {
     const {
@@ -163,24 +189,33 @@ const filterListings = async (req, res, next) => {
       if (sizeMax) filters.size.$lte = +sizeMax;
     }
 
-    // Keyword (search in both keyword and description)
+    // Keyword: translate Arabic → English, then require ALL tokens in keyword or description
+    // So "شقق للبيع في سوريا" and "apartments for sale in Syria" produce the same results
     if (keyword) {
-      const keywordConditions = [
-        { propertyKeyword: { $regex: keyword, $options: 'i' } },
-        { propertyDesc: { $regex: keyword, $options: 'i' } }
-      ];
-      
-      // If we already have $or (from Villa/farms), we need to combine with $and
-      if (filters.$or && filters.$or.length > 0) {
-        // Convert existing $or to $and structure
-        const existingConditions = filters.$or;
-        filters.$and = [
-          { $or: existingConditions },
-          { $or: keywordConditions }
-        ];
-        delete filters.$or;
-      } else {
-        filters.$or = keywordConditions;
+      const searchKeyword = convertArabicKeywordForSearch(keyword.trim());
+      const tokens = searchKeyword.split(/[\s,،]+/).map((t) => t.trim()).filter(Boolean);
+      const keywordTokenConditions = tokens.map((token) => {
+        const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return {
+          $or: [
+            { propertyKeyword: { $regex: escaped, $options: 'i' } },
+            { propertyDesc: { $regex: escaped, $options: 'i' } }
+          ]
+        };
+      });
+
+      if (keywordTokenConditions.length > 0) {
+        const keywordAnd = keywordTokenConditions.length === 1
+          ? keywordTokenConditions[0]
+          : { $and: keywordTokenConditions };
+
+        if (filters.$or && filters.$or.length > 0) {
+          const existingConditions = filters.$or;
+          filters.$and = [{ $or: existingConditions }, keywordAnd];
+          delete filters.$or;
+        } else {
+          Object.assign(filters, keywordAnd);
+        }
       }
     }
 
