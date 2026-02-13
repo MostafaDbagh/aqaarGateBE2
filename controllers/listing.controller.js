@@ -108,11 +108,9 @@ const createListing = async (req, res, next) => {
       notes
     } = req.body;
 
-    // Validate required fields
+    // Validate required fields (description, address, neighborhood are optional)
     const requiredFields = {
       propertyType,
-      // propertyKeyword is optional - removed from required fields
-      propertyDesc,
       propertyPrice,
       status,
       bedrooms,
@@ -120,9 +118,7 @@ const createListing = async (req, res, next) => {
       size,
       furnished,
       garages,
-      address,
       country,
-      neighborhood,
       agent
     };
 
@@ -207,7 +203,7 @@ const createListing = async (req, res, next) => {
       propertyId: propertyId || `PROP_${Date.now()}`,
       propertyType: String(propertyType),
       propertyKeyword: propertyKeyword ? String(propertyKeyword) : undefined, // Optional field
-      propertyDesc: String(propertyDesc),
+      propertyDesc: (propertyDesc != null && propertyDesc !== '') ? String(propertyDesc) : '',
       description_ar: req.body.description_ar ? String(req.body.description_ar) : undefined,
       propertyPrice: exactPrice, // CRITICAL: Store exact price - NO DEDUCTION, NO MODIFICATION, NO FEES
       currency: currency ? String(currency) : 'USD',
@@ -225,12 +221,12 @@ const createListing = async (req, res, next) => {
       floor: req.body.floor ? toNumber(req.body.floor) : undefined,
       numberOfFloors: req.body.numberOfFloors ? toNumber(req.body.numberOfFloors) : undefined,
       amenities: toArray(amenities),
-      address: String(address),
+      address: (address != null && address !== '') ? String(address) : '',
       address_ar: req.body.address_ar ? String(req.body.address_ar) : undefined,
       country: String(country),
       city: String(city),
       state: state ? String(state) : undefined, // Keep for backward compatibility
-      neighborhood: String(neighborhood),
+      neighborhood: (neighborhood != null && neighborhood !== '') ? String(neighborhood) : '',
       neighborhood_ar: req.body.neighborhood_ar ? String(req.body.neighborhood_ar) : undefined,
       agent: String(agent), // Required legacy field
       agentId: agentId ? (mongoose.Types.ObjectId.isValid(agentId) ? new mongoose.Types.ObjectId(agentId) : null) : null,

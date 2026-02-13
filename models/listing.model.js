@@ -4,7 +4,7 @@ const listingSchema = new mongoose.Schema(
     propertyId: { type: String, unique: true },  
     propertyType: { type: String, required: true },           
     propertyKeyword: { type: String, required: false },
-    propertyDesc: { type: String, required: true },
+    propertyDesc: { type: String, required: false },
     description: { type: String }, // Alternative field name
     description_ar: { type: String }, // Arabic description
     propertyPrice: { type: Number, required: true },
@@ -42,12 +42,12 @@ const listingSchema = new mongoose.Schema(
     numberOfFloors: { type: Number }, // For propertyType "Building" - total number of floors
     amenities: [{ type: String }],  
 //////property location//////////
-    address: { type: String, required: true },
+    address: { type: String, required: false },
     address_ar: { type: String }, // Arabic full address
     country: { type: String,required:true  },
     city: { type: String,required:true  },
     state: { type: String }, // Keep for backward compatibility
-    neighborhood: { type: String,required:true },
+    neighborhood: { type: String, required: false },
     neighborhood_ar: { type: String }, // Arabic neighborhood
     mapLocation: { type: String, required: false }, // Google Maps location URL or coordinates
 
