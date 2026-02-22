@@ -612,6 +612,16 @@ const updateListing = async (req, res, next) => {
       }
     }
 
+    // Handle squareFootage - use parseFloat for decimals, sync to size and landArea for display
+    if (updateData.squareFootage !== undefined) {
+      const sq = parseFloat(updateData.squareFootage);
+      if (!isNaN(sq) && sq >= 0) {
+        updateData.squareFootage = sq;
+        updateData.size = sq;
+        updateData.landArea = sq;
+      }
+    }
+
     const updatedListing = await Listing.findByIdAndUpdate(
       req.params.id,
       {
