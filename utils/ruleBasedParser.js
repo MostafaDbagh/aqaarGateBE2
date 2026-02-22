@@ -372,9 +372,9 @@ const parseQuery = (query) => {
     // Extract bedrooms
     // Patterns: "2 bedrooms", "2 bedroom", "2 BR", "2 room", "2 rooms", "two bedrooms"
     const bedroomPatterns = [
-      /(\d+)\s*(?:bedroom|bedrooms|bed|br|room|rooms)\b/i,
-      /\b(?:bedroom|bedrooms|bed|br|room|rooms)\s*(?:of|with|has)?\s*(\d+)/i,
-      /\b(one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:bedroom|bedrooms|bed|br|room|rooms)\b/i
+      /(\d+)\s*(?:bedroom|bedrooms|bed|beds|br|room|rooms)\b/i,
+      /\b(?:bedroom|bedrooms|bed|beds|br|room|rooms)\s*(?:of|with|has)?\s*(\d+)/i,
+      /\b(one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:bedroom|bedrooms|bed|beds|br|room|rooms)\b/i
     ];
 
     for (const pattern of bedroomPatterns) {

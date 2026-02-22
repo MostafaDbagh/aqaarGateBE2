@@ -1069,12 +1069,19 @@ const aiSearch = async (req, res, next) => {
       // Use rule-based parser (no external API needed - works in Syria)
       extractedParams = parseQuery(query);
 
-      // Use OpenAI when available (AI takes precedence over rule-based)
+      // Use OpenAI when available - merge: AI enriches, but rule-based keeps values AI returns null for
+      // (Rule-based handles word numbers like "three" reliably; AI may return null and overwrite)
       if (process.env.OPENAI_API_KEY) {
         try {
           const { parseAIQuery } = require('../utils/aiSearchParser');
           const aiParams = await parseAIQuery(query);
-          extractedParams = { ...extractedParams, ...aiParams };
+          const mergeValue = (ruleVal, aiVal) => (aiVal != null && aiVal !== '') ? aiVal : ruleVal;
+          extractedParams = {
+            ...extractedParams,
+            ...Object.fromEntries(
+              Object.entries(aiParams || {}).map(([k, v]) => [k, mergeValue(extractedParams[k], v)])
+            )
+          };
           logger.info('✅ Using OpenAI for enhanced parsing');
         } catch (aiError) {
           logger.warn('OpenAI parsing failed, using rule-based only:', aiError.message);
