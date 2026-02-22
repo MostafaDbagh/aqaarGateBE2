@@ -374,7 +374,7 @@ const parseQuery = (query) => {
     const bedroomPatterns = [
       /(\d+)\s*(?:bedroom|bedrooms|bed|beds|br|room|rooms)\b/i,
       /\b(?:bedroom|bedrooms|bed|beds|br|room|rooms)\s*(?:of|with|has)?\s*(\d+)/i,
-      /\b(one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:bedroom|bedrooms|bed|beds|br|room|rooms)\b/i
+      /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:bedroom|bedrooms|bed|beds|br|room|rooms)\b/i
     ];
 
     for (const pattern of bedroomPatterns) {
@@ -548,7 +548,7 @@ const parseQuery = (query) => {
     const bathroomPatterns = [
       /(\d+)\s*(?:bathroom|bathrooms|bath|baths)\b/i,
       /\b(?:bathroom|bathrooms|bath|baths)\s*(?:of|with|has)?\s*(\d+)/i,
-      /\b(one|two|three|four|five)\s*(?:bathroom|bathrooms|bath|baths)\b/i
+      /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:bathroom|bathrooms|bath|baths)\b/i
     ];
 
     for (const pattern of bathroomPatterns) {
@@ -1910,18 +1910,11 @@ const extractNumber = (str) => {
  */
 const wordToNumber = (word) => {
   const wordMap = {
-    'one': 1,
-    'two': 2,
-    'three': 3,
-    'four': 4,
-    'five': 5,
-    'six': 6,
-    'seven': 7,
-    'eight': 8,
-    'nine': 9,
-    'ten': 10
+    'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+    'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+    'eleven': 11, 'twelve': 12
   };
-  return wordMap[word.toLowerCase()] || null;
+  return wordMap[String(word || '').toLowerCase()] ?? null;
 };
 
 module.exports = {

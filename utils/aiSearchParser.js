@@ -387,19 +387,25 @@ const normalizeExtractedParams = (params) => {
     }
   }
 
+  // Word-to-number for bedrooms/bathrooms (AI may return "three", "four", etc.)
+  const wordToNumber = (val) => {
+    if (val == null) return null;
+    const s = String(val).toLowerCase().trim();
+    const map = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+    if (map[s] != null) return map[s];
+    const n = parseInt(val, 10);
+    return !isNaN(n) && n >= 0 ? n : null;
+  };
+
   // Normalize numeric fields
   if (params.bedrooms !== null && params.bedrooms !== undefined) {
-    const bedrooms = parseInt(params.bedrooms);
-    if (!isNaN(bedrooms) && bedrooms >= 0) {
-      normalized.bedrooms = bedrooms;
-    }
+    const bedrooms = wordToNumber(params.bedrooms);
+    if (bedrooms != null) normalized.bedrooms = bedrooms;
   }
 
   if (params.bathrooms !== null && params.bathrooms !== undefined) {
-    const bathrooms = parseInt(params.bathrooms);
-    if (!isNaN(bathrooms) && bathrooms >= 0) {
-      normalized.bathrooms = bathrooms;
-    }
+    const bathrooms = wordToNumber(params.bathrooms);
+    if (bathrooms != null) normalized.bathrooms = bathrooms;
   }
 
   if (params.sizeMin !== null && params.sizeMin !== undefined) {

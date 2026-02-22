@@ -1162,6 +1162,25 @@ const aiSearch = async (req, res, next) => {
       }
     }
 
+    // Ensure bedrooms/bathrooms are numbers (handle "three", "3", etc.)
+    const toNum = (v) => {
+      if (v == null) return null;
+      if (typeof v === 'number' && !isNaN(v) && v >= 0) return Math.floor(v);
+      const s = String(v).toLowerCase().trim();
+      const words = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+      if (words[s] != null) return words[s];
+      const n = parseInt(v, 10);
+      return !isNaN(n) && n >= 0 ? Math.floor(n) : null;
+    };
+    if (extractedParams.bedrooms != null) {
+      const n = toNum(extractedParams.bedrooms);
+      if (n != null) extractedParams.bedrooms = n;
+    }
+    if (extractedParams.bathrooms != null) {
+      const n = toNum(extractedParams.bathrooms);
+      if (n != null) extractedParams.bathrooms = n;
+    }
+
     // Apply numeric filters
     // For bedrooms: if user searches for "X rooms + salon", search for X or more rooms
     // This handles cases where properties are listed as "2 rooms" but have a salon (which counts as +1)
