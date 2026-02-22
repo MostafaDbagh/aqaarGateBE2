@@ -8,7 +8,8 @@ const PROPERTY_TYPES = [
   'Office',
   'Land',
   'Commercial',
-  'Holiday Home'
+  'Holiday Home',
+  'Building'
 ];
 
 // Available amenities in the system
@@ -234,6 +235,10 @@ const parseQuery = (query) => {
       // Land variations
       else if (normalizedQuery.match(/\b(land|lands|plot|plots|piece of land|parcel|parcels|lot|lots|terrain|terrains|acre|acres|field|fields|ground|grounds|estate|estates|land plot|land plots|building plot|building plots|construction land|construction lands)\b/)) {
         extractedParams.propertyType = 'Land';
+      }
+      // Building (whole building) - after Land so "building plot" stays Land
+      else if (normalizedQuery.match(/\b(whole building|entire building|full building|complete building|buildings?|multi-?story building|apartment building|residential building|multi-?storey building|tower|towers|block|blocks)\b/)) {
+        extractedParams.propertyType = 'Building';
       } 
       // Holiday Home variations
       else if (normalizedQuery.match(/\b(holiday home|holiday homes|vacation home|vacation homes|short-term rental|short term rental|daily rental|weekly rental|tourist house|tourist houses|rental house|rental houses|vacation rental|vacation rentals|holiday rental|holiday rentals|temporary rental|temporary rentals)\b/)) {
@@ -334,6 +339,16 @@ const parseQuery = (query) => {
                  query.includes('أرض للبناء') || query.includes('ارض للبناء') ||
                  query.includes('قطعة بناء') || query.includes('قطع بناء')) {
         extractedParams.propertyType = 'Land';
+      }
+      // Building (whole building / بناء كامل) - after Land so "أرض بناء" stays Land
+      else if (query.includes('بناء كامل') || query.includes('بناء كامله') ||
+                 query.includes('مبنى') || query.includes('مباني') ||
+                 query.includes('عمارة') || query.includes('عمارات') ||
+                 query.includes('برج') || query.includes('أبراج') ||
+                 query.includes('مبنى سكني') || query.includes('مباني سكنية') ||
+                 query.includes('عمارة سكنية') || query.includes('عمارات سكنية') ||
+                 (query.includes('بناء') && (query.includes('للبيع') || query.includes('للإيجار') || query.includes('للايجار')))) {
+        extractedParams.propertyType = 'Building';
       } 
       // Commercial variations
       // NOTE: "عقار تجاري" already checked above, so we don't need to check it again here
@@ -365,8 +380,10 @@ const parseQuery = (query) => {
     for (const pattern of bedroomPatterns) {
       const match = normalizedQuery.match(pattern);
       if (match) {
-        const num = match[1] ? parseInt(match[1]) : wordToNumber(match[0]);
-        if (!isNaN(num) && num > 0) {
+        // match[1] can be digit ("3") or word ("three") - handle both
+        const raw = match[1] || match[0];
+        const num = /\d+/.test(raw) ? parseInt(raw, 10) : wordToNumber(raw);
+        if (num != null && !isNaN(num) && num > 0) {
           extractedParams.bedrooms = num;
           break;
         }
@@ -537,8 +554,9 @@ const parseQuery = (query) => {
     for (const pattern of bathroomPatterns) {
       const match = normalizedQuery.match(pattern);
       if (match) {
-        const num = match[1] ? parseInt(match[1]) : wordToNumber(match[0]);
-        if (!isNaN(num) && num > 0) {
+        const raw = match[1] || match[0];
+        const num = /\d+/.test(raw) ? parseInt(raw, 10) : wordToNumber(raw);
+        if (num != null && !isNaN(num) && num > 0) {
           extractedParams.bathrooms = num;
           break;
         }

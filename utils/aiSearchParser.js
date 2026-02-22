@@ -152,6 +152,10 @@ All these terms mean land/plot and should map to "Land"
 - "holiday home", "holiday homes", "vacation home", "vacation homes", "short-term rental", "short term rental", "daily rental", "weekly rental", "tourist house", "tourist houses", "rental house", "rental houses", "vacation rental", "vacation rentals", "holiday rental", "holiday rentals", "temporary rental", "temporary rentals" (English) → "Holiday Home"
 - "بيوت عطلات", "بيوت عطلة", "بيت عطلة", "بيت عطلات", "بيت اجار قصير", "بيت إيجار قصير", "بيت إيجار يومي", "بيت اجار يومي", "بيت إيجار أسبوعي", "بيت اجار اسبوعي", "بيت سياحي", "بيوت سياحية", "منزل سياحي", "منازل سياحية", "فيلا سياحية", "فيلات سياحية", "بيت للإيجار اليومي", "بيت للايجار اليومي", "بيت للإيجار الأسبوعي", "بيت للايجار الاسبوعي", "بيت للإيجار القصير", "بيت للايجار القصير", "إيجار قصير", "ايجار قصير", "إيجار يومي", "ايجار يومي", "إيجار أسبوعي", "ايجار اسبوعي" (Arabic) → "Holiday Home"
 CRITICAL: "بيت" or "منزل" alone (without holiday/tourist context) → "Apartment", NOT "Holiday Home"
+
+- "building", "buildings", "whole building", "entire building", "full building", "complete building", "multi-story building", "multi-storey building", "apartment building", "residential building", "tower", "towers", "block", "blocks" (English) → "Building"
+- "بناء كامل", "بناء كامله", "مبنى", "مباني", "عمارة", "عمارات", "برج", "أبراج", "مبنى سكني", "مباني سكنية", "عمارة سكنية", "عمارات سكنية", "بناء للبيع", "بناء للإيجار", "بناء للايجار" (Arabic) → "Building"
+CRITICAL: "building plot", "construction land", "أرض بناء", "قطعة بناء" → "Land", NOT "Building"
 Only when combined with "عطلة", "عطلات", "سياحي", "إيجار قصير", "إيجار يومي", "إيجار أسبوعي" → "Holiday Home"
 
 Your task is to extract structured search parameters from the user's query. Return ONLY a valid JSON object with the following structure:
