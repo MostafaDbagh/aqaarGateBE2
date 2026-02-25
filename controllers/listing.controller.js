@@ -1777,11 +1777,35 @@ const updateListingImages = async (req, res, next) => {
   }
 };
 
+/**
+ * Set listing as featured (star) - admin only. Featured listings stay in Fresh Listings.
+ * PATCH /api/listing/:id/featured  body: { isFeatured: true | false }
+ */
+const setListingFeatured = async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return next(errorHandler(403, 'Only admins can feature listings'));
+    }
+    const listing = await Listing.findById(req.params.id);
+    if (!listing) {
+      return next(errorHandler(404, 'Listing not found'));
+    }
+    const isFeatured = req.body?.isFeatured === true;
+    listing.isFeatured = isFeatured;
+    await listing.save();
+    logger.info(`Listing ${listing._id} featured=${isFeatured} by admin`);
+    res.status(200).json({ success: true, isFeatured: listing.isFeatured });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createListing,
   deleteListing,
   updateListing,
   updateListingImages,
+  setListingFeatured,
   getListingById,
   getListingImages,
   getListingsByAgent,

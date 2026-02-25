@@ -28,6 +28,7 @@ router.post('/import', verifyToken, upload.single('csvFile'), ListingController.
 router.delete('/delete/:id', verifyToken, refundPointsOnListingDelete, ListingController.deleteListing);
 router.post('/update/:id/images', verifyToken, uploadListingImages, handleMulterError, uploadListingImagesMiddleware, ListingController.updateListingImages);
 router.post('/update/:id', verifyToken, ListingController.updateListing);
+router.patch('/:id/featured', verifyToken, ListingController.setListingFeatured);
 router.get('/agent/:agentId', ListingController.getListingsByAgent);
 router.get('/agent/:agentId/mostVisited', ListingController.getMostVisitedListings);
 router.get('/:id/images', ListingController.getListingImages);

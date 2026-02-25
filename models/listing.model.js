@@ -73,6 +73,7 @@ const listingSchema = new mongoose.Schema(
     deletedReason: { type: String, required: false }, // Reason for deletion
     deletedAt: { type: Date }, // Date when property was deleted
     offer: { type: Boolean, required: false },
+    isFeatured: { type: Boolean, default: false }, // Admin can star listings; featured stay in Fresh Listings
     visitCount: { type: Number, default: 0 },
     notes: { type: String, required: false }, // Additional notes about the property
     notes_ar: { type: String, required: false }, // Arabic notes
@@ -106,6 +107,7 @@ listingSchema.index({ city: 1, state: 1 }); // Location-based searches
 listingSchema.index({ agentId: 1 }); // Agent dashboard queries
 listingSchema.index({ approvalStatus: 1 }); // Admin filtering
 listingSchema.index({ createdAt: -1 }); // Sorting by newest
+listingSchema.index({ isFeatured: -1, createdAt: -1 }); // Fresh Listings: featured first, then newest
 listingSchema.index({ propertyPrice: 1 }); // Price range queries
 listingSchema.index({ status: 1, propertyType: 1, isDeleted: 1 }); // Common filter combination
 listingSchema.index({ city: 1, status: 1, isDeleted: 1 }); // Location + status filtering

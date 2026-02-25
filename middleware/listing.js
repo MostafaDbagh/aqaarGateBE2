@@ -227,13 +227,13 @@ const filterListings = async (req, res, next) => {
       filters.amenities = { $all: amenitiesArray };
     }
 
-    // Handle sorting
-    let sortOptions = { createdAt: -1 }; // Default: newest first
+    // Handle sorting - when newest, show featured first then by date
+    let sortOptions = { isFeatured: -1, createdAt: -1 }; // Default: featured first, then newest
     if (sort) {
       logger.debug('Sort parameter received:', sort);
       switch (sort.toLowerCase()) {
         case 'newest':
-          sortOptions = { createdAt: -1 };
+          sortOptions = { isFeatured: -1, createdAt: -1 };
           break;
         case 'oldest':
           sortOptions = { createdAt: 1 };
@@ -245,7 +245,7 @@ const filterListings = async (req, res, next) => {
           sortOptions = { propertyPrice: -1 };
           break;
         default:
-          sortOptions = { createdAt: -1 };
+          sortOptions = { isFeatured: -1, createdAt: -1 };
       }
       logger.debug('Sort options applied:', sortOptions);
     }

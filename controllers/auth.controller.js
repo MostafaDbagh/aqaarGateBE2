@@ -202,7 +202,7 @@ const signin = async (req, res, next) => {
       return next(errorHandler(500, 'Server configuration error: ' + error.message));
     }
     
-    const token = jwt.sign({ id: validUser._id }, jwtSecret);
+    const token = jwt.sign({ id: validUser._id, role: validUser.role }, jwtSecret);
     const { password: pass, ...rest } = validUser._doc;
     res
       .cookie('access_token', token, { httpOnly: true })
@@ -229,7 +229,7 @@ const google = async (req, res, next) => {
         return next(errorHandler(500, 'Server configuration error: ' + error.message));
       }
       
-      const token = jwt.sign({ id: user._id }, jwtSecret);
+      const token = jwt.sign({ id: user._id, role: user.role }, jwtSecret);
       const { password: pass, ...rest } = user._doc;
       res
         .cookie('access_token', token, { httpOnly: true })
@@ -262,7 +262,7 @@ const google = async (req, res, next) => {
         return next(errorHandler(500, 'Server configuration error: ' + error.message));
       }
       
-      const token = jwt.sign({ id: newUser._id }, jwtSecret);
+      const token = jwt.sign({ id: newUser._id, role: newUser.role }, jwtSecret);
       const { password: pass, ...rest } = newUser._doc;
       res
         .cookie('access_token', token, { httpOnly: true })
