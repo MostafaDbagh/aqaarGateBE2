@@ -1,10 +1,35 @@
 const OpenAI = require('openai');
 const logger = require('./logger');
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// LLM provider: DeepSeek (preferred when key set) or OpenAI. Both use OpenAI-compatible API.
+const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
+const DEEPSEEK_CHAT_MODEL = 'deepseek-chat';
+
+function getLLMClient() {
+  if (process.env.DEEPSEEK_API_KEY) {
+    return {
+      client: new OpenAI({
+        apiKey: process.env.DEEPSEEK_API_KEY,
+        baseURL: DEEPSEEK_BASE_URL,
+      }),
+      model: DEEPSEEK_CHAT_MODEL,
+      provider: 'DeepSeek',
+    };
+  }
+  if (process.env.OPENAI_API_KEY) {
+    return {
+      client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+      model: 'gpt-3.5-turbo',
+      provider: 'OpenAI',
+    };
+  }
+  return null;
+}
+
+/** True if either DeepSeek or OpenAI is configured for AI search */
+function isAIConfigured() {
+  return Boolean(process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY);
+}
 
 // Available property types in the system
 const PROPERTY_TYPES = [
@@ -107,9 +132,10 @@ const mapAmenityToSystem = (amenityText) => {
  */
 const parseAIQuery = async (query) => {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      logger.error('OpenAI API key not configured');
-      throw new Error('AI search is not configured. Please set OPENAI_API_KEY in environment variables.');
+    const llm = getLLMClient();
+    if (!llm) {
+      logger.error('No AI provider configured (set DEEPSEEK_API_KEY or OPENAI_API_KEY)');
+      throw new Error('AI search is not configured. Please set DEEPSEEK_API_KEY or OPENAI_API_KEY in environment variables.');
     }
 
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
@@ -213,17 +239,17 @@ Response: {"propertyType": "Villa/farms", "bedrooms": null, "bathrooms": null, "
 Query: "فلل مزارع مزرعة"
 Response: {"propertyType": "Villa/farms", "bedrooms": null, "bathrooms": null, "amenities": [], "keywords": [], "viewType": null, "status": null, "city": null, "neighborhood": null, "furnished": null, "garages": null, "sizeMin": null, "sizeMax": null, "priceMin": null, "priceMax": null}`;
 
-    logger.info(`🤖 Parsing AI query: "${query}"`);
+    logger.info(`🤖 Parsing AI query (${llm.provider}): "${query}"`);
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+    const completion = await llm.client.chat.completions.create({
+      model: llm.model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: query }
       ],
-      temperature: 0.3, // Lower temperature for more consistent, structured output
+      temperature: 0.3,
       max_tokens: 500,
-      response_format: { type: 'json_object' } // Force JSON response
+      response_format: { type: 'json_object' }
     });
 
     const responseText = completion.choices[0]?.message?.content;
@@ -518,6 +544,7 @@ const normalizeExtractedParams = (params) => {
 
 module.exports = {
   parseAIQuery,
+  isAIConfigured,
   mapAmenityToSystem,
   PROPERTY_TYPES,
   AMENITIES,
