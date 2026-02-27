@@ -88,7 +88,4 @@ router.put('/:id', validateBlogUpdate, blogController.updateBlog);
 // DELETE /api/blog/:id - Delete blog
 router.delete('/:id', blogController.deleteBlog);
 
-// POST /api/blog/:id/comments - Add comment to blog
-router.post('/:id/comments', blogController.addComment);
-
 module.exports = router;

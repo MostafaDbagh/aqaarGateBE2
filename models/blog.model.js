@@ -3,13 +3,20 @@ const mongoose = require('mongoose');
 const blogSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Blog title is required'],
     trim: true,
     maxlength: [200, 'Title cannot exceed 200 characters']
   },
+  title_ar: {
+    type: String,
+    trim: true,
+    maxlength: [200, 'Arabic title cannot exceed 200 characters']
+  },
   content: {
     type: String,
-    required: [true, 'Blog content is required'],
+    trim: true
+  },
+  content_ar: {
+    type: String,
     trim: true
   },
   excerpt: {
@@ -17,34 +24,51 @@ const blogSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Excerpt cannot exceed 500 characters']
   },
+  excerpt_ar: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Arabic excerpt cannot exceed 500 characters']
+  },
   imageSrc: {
     type: String,
-    required: [true, 'Blog image is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   tag: {
     type: String,
-    required: [true, 'Blog tag is required'],
     trim: true,
     enum: ['Real Estate', 'News', 'Investment', 'Market Updates', 'Buying Tips', 'Interior Inspiration', 'Investment Insights', 'Home Construction', 'Legal Guidance', 'Community Spotlight']
   },
+  tag_ar: {
+    type: String,
+    trim: true,
+    maxlength: [100, 'Arabic tag cannot exceed 100 characters']
+  },
   category: {
     type: String,
-    required: [true, 'Blog category is required'],
     trim: true,
     enum: ['Property', 'Market', 'Investment', 'Tips', 'News', 'Legal']
+  },
+  category_ar: {
+    type: String,
+    trim: true,
+    maxlength: [100, 'Arabic category cannot exceed 100 characters']
   },
   author: {
     name: {
       type: String,
-      required: [true, 'Author name is required'],
+      trim: true,
+      default: 'Admin'
+    },
+    name_ar: {
+      type: String,
       trim: true
     },
     email: {
       type: String,
-      required: [true, 'Author email is required'],
       trim: true,
-      lowercase: true
+      lowercase: true,
+      default: ''
     },
     avatar: {
       type: String,
@@ -64,37 +88,15 @@ const blogSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  likes: {
-    type: Number,
-    default: 0
-  },
-  comments: [{
-    user: {
-      name: String,
-      email: String,
-      avatar: String
-    },
-    content: String,
-    date: {
-      type: Date,
-      default: Date.now
-    },
-    approved: {
-      type: Boolean,
-      default: false
-    }
-  }],
   tags: [{
     type: String,
     trim: true
   }],
-  relatedProperties: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Listing'
-  }],
   seo: {
     metaTitle: String,
+    metaTitle_ar: String,
     metaDescription: String,
+    metaDescription_ar: String,
     keywords: [String]
   },
   publishedAt: {
@@ -111,8 +113,15 @@ const blogSchema = new mongoose.Schema({
   }
 });
 
-// Index for better query performance
-blogSchema.index({ title: 'text', content: 'text', excerpt: 'text' });
+// Index for better query performance (EN + AR for search)
+blogSchema.index({
+  title: 'text',
+  title_ar: 'text',
+  content: 'text',
+  content_ar: 'text',
+  excerpt: 'text',
+  excerpt_ar: 'text'
+});
 blogSchema.index({ tag: 1, category: 1 });
 blogSchema.index({ status: 1, featured: 1 });
 blogSchema.index({ publishedAt: -1 });

@@ -1,6 +1,65 @@
 const Blog = require('../models/blog.model');
 const { validationResult } = require('express-validator');
 
+// Admin: Get all blogs with filtering and pagination (no status filter by default)
+exports.getAdminBlogs = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const filter = {};
+    if (status) filter.status = status;
+
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { title_ar: { $regex: search, $options: 'i' } },
+        { content: { $regex: search, $options: 'i' } },
+        { content_ar: { $regex: search, $options: 'i' } },
+        { excerpt: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const blogs = await Blog.find(filter)
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await Blog.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: blogs,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+        hasNextPage: skip + parseInt(limit) < total,
+        hasPrevPage: parseInt(page) > 1
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching blogs',
+      error: error.message
+    });
+  }
+};
+
 // Get all blogs with filtering and pagination
 exports.getAllBlogs = async (req, res) => {
   try {
@@ -41,8 +100,7 @@ exports.getAllBlogs = async (req, res) => {
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('relatedProperties', 'propertyKeyword propertyPrice address')
-      .select('-content'); // Exclude full content for list view
+      .select('-content -content_ar'); // Exclude full content for list view
 
     // Get total count for pagination
     const total = await Blog.countDocuments(filter);
@@ -73,8 +131,7 @@ exports.getBlogById = async (req, res) => {
   try {
     const { id } = req.params;
     
-    const blog = await Blog.findById(id)
-      .populate('relatedProperties', 'propertyKeyword propertyPrice address images');
+    const blog = await Blog.findById(id);
 
     if (!blog) {
       return res.status(404).json({
@@ -100,10 +157,9 @@ exports.getBlogById = async (req, res) => {
   }
 };
 
-// Create new blog
+// Create new blog (admin: at least one of title/title_ar and content/content_ar)
 exports.createBlog = async (req, res) => {
   try {
-    // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -114,13 +170,23 @@ exports.createBlog = async (req, res) => {
     }
 
     const blogData = req.body;
+    const hasTitle = (blogData.title && blogData.title.trim()) || (blogData.title_ar && blogData.title_ar.trim());
+    const hasContent = (blogData.content && blogData.content.trim()) || (blogData.content_ar && blogData.content_ar.trim());
+    if (!hasTitle || !hasContent) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one of title/title_ar and one of content/content_ar is required'
+      });
+    }
 
-    // Set author information if not provided
-    if (!blogData.author) {
+    if (!blogData.author || typeof blogData.author !== 'object') {
       blogData.author = {
         name: 'Admin',
         email: 'admin@example.com'
       };
+    } else {
+      blogData.author.name = blogData.author.name || 'Admin';
+      blogData.author.email = blogData.author.email || 'admin@example.com';
     }
 
     const blog = new Blog(blogData);
@@ -160,7 +226,7 @@ exports.updateBlog = async (req, res) => {
       id,
       updateData,
       { new: true, runValidators: true }
-    ).populate('relatedProperties', 'propertyKeyword propertyPrice address');
+    );
 
     if (!blog) {
       return res.status(404).json({
@@ -290,8 +356,7 @@ exports.getBlogStats = async (req, res) => {
           draftBlogs: {
             $sum: { $cond: [{ $eq: ['$status', 'draft'] }, 1, 0] }
           },
-          totalViews: { $sum: '$viewCount' },
-          totalLikes: { $sum: '$likes' }
+          totalViews: { $sum: '$viewCount' }
         }
       }
     ]);
@@ -314,51 +379,6 @@ exports.getBlogStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching blog statistics',
-      error: error.message
-    });
-  }
-};
-
-// Add comment to blog
-exports.addComment = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { user, content } = req.body;
-
-    if (!user || !content) {
-      return res.status(400).json({
-        success: false,
-        message: 'User and content are required'
-      });
-    }
-
-    const blog = await Blog.findById(id);
-    if (!blog) {
-      return res.status(404).json({
-        success: false,
-        message: 'Blog not found'
-      });
-    }
-
-    const comment = {
-      user,
-      content,
-      date: new Date(),
-      approved: false // Comments need approval by default
-    };
-
-    blog.comments.push(comment);
-    await blog.save();
-
-    res.json({
-      success: true,
-      message: 'Comment added successfully',
-      data: blog.comments[blog.comments.length - 1]
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error adding comment',
       error: error.message
     });
   }
