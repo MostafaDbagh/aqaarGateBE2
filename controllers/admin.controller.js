@@ -234,9 +234,16 @@ const getPropertiesByAdmin = async (req, res, next) => {
       limit: parseInt(limit)
     });
 
+    // Ensure isFeatured and featuredOrder are always present so admin UI shows saved order after refresh
+    const data = properties.map((p) => ({
+      ...p,
+      isFeatured: p.isFeatured === true,
+      featuredOrder: p.featuredOrder != null && !Number.isNaN(Number(p.featuredOrder)) ? Number(p.featuredOrder) : null
+    }));
+
     res.status(200).json({
       success: true,
-      data: properties,
+      data,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
