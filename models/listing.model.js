@@ -74,6 +74,8 @@ const listingSchema = new mongoose.Schema(
     deletedAt: { type: Date }, // Date when property was deleted
     offer: { type: Boolean, required: false },
     isFeatured: { type: Boolean, default: false }, // Admin can star listings; featured stay in Fresh Listings
+    featuredOrder: { type: Number, default: null }, // Admin-defined position (1 = first listing). Null = no order (after ordered ones, then by date)
+    isVip: { type: Boolean, default: false }, // Admin can mark as VIP; shown on VIP page for time-conscious clients
     visitCount: { type: Number, default: 0 },
     notes: { type: String, required: false }, // Additional notes about the property
     notes_ar: { type: String, required: false }, // Arabic notes
@@ -108,6 +110,9 @@ listingSchema.index({ agentId: 1 }); // Agent dashboard queries
 listingSchema.index({ approvalStatus: 1 }); // Admin filtering
 listingSchema.index({ createdAt: -1 }); // Sorting by newest
 listingSchema.index({ isFeatured: -1, createdAt: -1 }); // Fresh Listings: featured first, then newest
+listingSchema.index({ isFeatured: -1, featuredOrder: 1, createdAt: -1 }); // Featured order (1=first, null last)
+// Compound index for getFilteredListings (public search): match + sort in one index
+listingSchema.index({ approvalStatus: 1, isDeleted: 1, isSold: 1, isFeatured: -1, featuredOrder: 1, createdAt: -1 });
 listingSchema.index({ propertyPrice: 1 }); // Price range queries
 listingSchema.index({ status: 1, propertyType: 1, isDeleted: 1 }); // Common filter combination
 listingSchema.index({ city: 1, status: 1, isDeleted: 1 }); // Location + status filtering
@@ -117,6 +122,7 @@ listingSchema.index({ isDeleted: 1, isSold: 1, approvalStatus: 1, propertyType: 
 // Optimized index for city stats aggregation query
 listingSchema.index({ isDeleted: 1, isSold: 1, approvalStatus: 1, city: 1 }); // City stats performance
 listingSchema.index({ isDeleted: 1, isSold: 1, approvalStatus: 1, state: 1 }); // City stats performance (state fallback)
+listingSchema.index({ isVip: 1, isDeleted: 1, isSold: 1, approvalStatus: 1 }); // VIP page
 
 const Listing = mongoose.model('Listing', listingSchema);
 

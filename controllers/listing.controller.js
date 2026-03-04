@@ -835,12 +835,60 @@ const getFilteredListings = async (req, res, next) => {
     logger.debug('getFilteredListings - sortOptions:', sortOptions);
     logger.debug('getFilteredListings - limit:', limit, 'skip:', skip);
     
-    // Query the database with filters
-    let listings = await Listing.find(filters)
-      .sort(sortOptions)
-      .limit(limit)
-      .skip(skip)
-      .lean(); // Use lean() for better performance
+    // Run count in parallel with main query to reduce latency
+    const countPromise = Listing.countDocuments(filters);
+    // When sorting by featured first (newest/default), use featuredOrder as position: 1 = index 0, 6 = index 5 (Fresh Listings only)
+    const useFeaturedOrderSort = sortOptions.isFeatured === -1 && sortOptions.createdAt === -1;
+    let listings;
+    if (useFeaturedOrderSort) {
+      const pipeline = [
+        { $match: filters },
+        { $addFields: { _featuredOrder: { $cond: [
+          { $and: [{ $eq: ['$isFeatured', true] }, { $ne: ['$featuredOrder', null] }, { $gte: ['$featuredOrder', 1] }] },
+          '$featuredOrder',
+          999999
+        ] } } },
+        { $sort: { isFeatured: -1, _featuredOrder: 1, createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        { $project: { _featuredOrder: 0 } }
+      ];
+      listings = await Listing.aggregate(pipeline);
+      // Position-based placement for first page only: featuredOrder N → slot index N-1 (so 6 = 6th item, index 5)
+      if (skip === 0 && listings.length > 0) {
+        const slots = new Array(Math.min(limit, listings.length)).fill(null);
+        const placedIds = new Set();
+        for (const doc of listings) {
+          const order = doc.featuredOrder;
+          if (doc.isFeatured && order >= 1 && order <= limit && order <= slots.length) {
+            const idx = order - 1;
+            if (idx < slots.length && slots[idx] === null) {
+              slots[idx] = doc;
+              placedIds.add(doc._id.toString());
+            }
+          }
+        }
+        let fillIdx = 0;
+        for (let i = 0; i < slots.length; i++) {
+          if (slots[i] === null) {
+            while (fillIdx < listings.length) {
+              const cand = listings[fillIdx++];
+              if (!placedIds.has(cand._id.toString())) {
+                slots[i] = cand;
+                break;
+              }
+            }
+          }
+        }
+        listings = slots.filter(Boolean);
+      }
+    } else {
+      listings = await Listing.find(filters)
+        .sort(sortOptions)
+        .limit(limit)
+        .skip(skip)
+        .lean();
+    }
     
     // If no results with exact match, try case-insensitive regex (for backward compatibility)
     if (listings.length === 0) {
@@ -848,18 +896,61 @@ const getFilteredListings = async (req, res, next) => {
       const filtersWithRegex = { ...filters };
       filtersWithRegex.approvalStatus = { $regex: /^approved$/i };
       
-      listings = await Listing.find(filtersWithRegex)
-        .sort(sortOptions)
-        .limit(limit)
-        .skip(skip)
-        .lean();
+      if (useFeaturedOrderSort) {
+        const pipelineRegex = [
+          { $match: filtersWithRegex },
+          { $addFields: { _featuredOrder: { $cond: [
+            { $and: [{ $eq: ['$isFeatured', true] }, { $ne: ['$featuredOrder', null] }, { $gte: ['$featuredOrder', 1] }] },
+            '$featuredOrder',
+            999999
+          ] } } },
+          { $sort: { isFeatured: -1, _featuredOrder: 1, createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+          { $project: { _featuredOrder: 0 } }
+        ];
+        listings = await Listing.aggregate(pipelineRegex);
+        if (skip === 0 && listings.length > 0) {
+          const slots = new Array(Math.min(limit, listings.length)).fill(null);
+          const placedIds = new Set();
+          for (const doc of listings) {
+            const order = doc.featuredOrder;
+            if (doc.isFeatured && order >= 1 && order <= limit && order <= slots.length) {
+              const idx = order - 1;
+              if (idx < slots.length && slots[idx] === null) {
+                slots[idx] = doc;
+                placedIds.add(doc._id.toString());
+              }
+            }
+          }
+          let fillIdx = 0;
+          for (let i = 0; i < slots.length; i++) {
+            if (slots[i] === null) {
+              while (fillIdx < listings.length) {
+                const cand = listings[fillIdx++];
+                if (!placedIds.has(cand._id.toString())) {
+                  slots[i] = cand;
+                  break;
+                }
+              }
+            }
+          }
+          listings = slots.filter(Boolean);
+        }
+      } else {
+        listings = await Listing.find(filtersWithRegex)
+          .sort(sortOptions)
+          .limit(limit)
+          .skip(skip)
+          .lean();
+      }
     }
     
-    // Log approvalStatus values for debugging
+    // Log approvalStatus values for debugging (debug level to avoid hot-path noise)
     if (listings.length > 0) {
-      logger.info(`📋 getFilteredListings - Found ${listings.length} listings`);
+      logger.debug(`📋 getFilteredListings - Found ${listings.length} listings`);
       listings.slice(0, 3).forEach((listing, index) => {
-        logger.info(`📋 getFilteredListings - Listing ${index + 1}: propertyId=${listing.propertyId}, approvalStatus=${listing.approvalStatus}, type=${typeof listing.approvalStatus}, isSold=${listing.isSold}, isDeleted=${listing.isDeleted}`);
+        logger.debug(`📋 getFilteredListings - Listing ${index + 1}: propertyId=${listing.propertyId}, approvalStatus=${listing.approvalStatus}, type=${typeof listing.approvalStatus}, isSold=${listing.isSold}, isDeleted=${listing.isDeleted}`);
       });
     } else {
       logger.warn(`⚠️ getFilteredListings - No listings found with filters:`, JSON.stringify(filters, null, 2));
@@ -891,8 +982,8 @@ const getFilteredListings = async (req, res, next) => {
     
     logger.debug('getFilteredListings - found', listings.length, 'listings');
     
-    // Get total count for pagination
-    const total = await Listing.countDocuments(filters);
+    // Use count from parallel query (started at top of handler)
+    const total = await countPromise;
     const totalPages = Math.ceil(total / limit);
     
     // Log sample of listings for debugging
@@ -1779,7 +1870,8 @@ const updateListingImages = async (req, res, next) => {
 
 /**
  * Set listing as featured (star) - admin only. Featured listings stay in Fresh Listings.
- * PATCH /api/listing/:id/featured  body: { isFeatured: true | false }
+ * Optional featuredOrder: 1 = first listing, 2 = second, etc. When you set one to N, others with order >= N bump down by 1.
+ * PATCH /api/listing/:id/featured  body: { isFeatured: true | false, featuredOrder?: number }
  */
 const setListingFeatured = async (req, res, next) => {
   try {
@@ -1792,9 +1884,46 @@ const setListingFeatured = async (req, res, next) => {
     }
     const isFeatured = req.body?.isFeatured === true;
     listing.isFeatured = isFeatured;
+    if (isFeatured && req.body?.featuredOrder !== undefined) {
+      const order = parseInt(req.body.featuredOrder, 10);
+      const newOrder = (Number.isInteger(order) && order >= 1) ? order : null;
+      if (newOrder !== null) {
+        // Bump down: all other featured listings with featuredOrder >= newOrder get +1 so this one can take the slot
+        await Listing.updateMany(
+          { isFeatured: true, featuredOrder: { $gte: newOrder }, _id: { $ne: listing._id } },
+          { $inc: { featuredOrder: 1 } }
+        );
+      }
+      listing.featuredOrder = newOrder;
+    } else if (!isFeatured) {
+      listing.featuredOrder = null;
+    }
     await listing.save();
-    logger.info(`Listing ${listing._id} featured=${isFeatured} by admin`);
-    res.status(200).json({ success: true, isFeatured: listing.isFeatured });
+    logger.info(`Listing ${listing._id} featured=${isFeatured} featuredOrder=${listing.featuredOrder} by admin`);
+    res.status(200).json({ success: true, isFeatured: listing.isFeatured, featuredOrder: listing.featuredOrder ?? undefined });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Set listing as VIP - admin only. VIP listings appear on the VIP page for time-conscious clients.
+ * PATCH /api/listing/:id/vip  body: { isVip: true | false }
+ */
+const setListingVip = async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return next(errorHandler(403, 'Only admins can mark listings as VIP'));
+    }
+    const listing = await Listing.findById(req.params.id);
+    if (!listing) {
+      return next(errorHandler(404, 'Listing not found'));
+    }
+    const isVip = req.body?.isVip === true;
+    listing.isVip = isVip;
+    await listing.save();
+    logger.info(`Listing ${listing._id} isVip=${isVip} by admin`);
+    res.status(200).json({ success: true, isVip: listing.isVip });
   } catch (error) {
     next(error);
   }
@@ -1806,6 +1935,7 @@ module.exports = {
   updateListing,
   updateListingImages,
   setListingFeatured,
+  setListingVip,
   getListingById,
   getListingImages,
   getListingsByAgent,

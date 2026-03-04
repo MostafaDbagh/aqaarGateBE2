@@ -115,9 +115,11 @@ const filterListings = async (req, res, next) => {
       propertyId,
       agentId,
       sort,
+      isVip,
     } = req.query;
 
     const filters = {};
+    if (isVip === 'true') filters.isVip = true;
 
     // Exact matches
     if (status) filters.status = status;
