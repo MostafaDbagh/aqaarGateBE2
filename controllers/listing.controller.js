@@ -859,8 +859,8 @@ const getFilteredListings = async (req, res, next) => {
         const slots = new Array(Math.min(limit, listings.length)).fill(null);
         const placedIds = new Set();
         for (const doc of listings) {
-          const order = doc.featuredOrder;
-          if (doc.isFeatured && order >= 1 && order <= limit && order <= slots.length) {
+          const order = Number(doc.featuredOrder);
+          if (doc.isFeatured && !Number.isNaN(order) && order >= 1 && order <= limit && order <= slots.length) {
             const idx = order - 1;
             if (idx < slots.length && slots[idx] === null) {
               slots[idx] = doc;
@@ -914,8 +914,8 @@ const getFilteredListings = async (req, res, next) => {
           const slots = new Array(Math.min(limit, listings.length)).fill(null);
           const placedIds = new Set();
           for (const doc of listings) {
-            const order = doc.featuredOrder;
-            if (doc.isFeatured && order >= 1 && order <= limit && order <= slots.length) {
+            const order = Number(doc.featuredOrder);
+            if (doc.isFeatured && !Number.isNaN(order) && order >= 1 && order <= limit && order <= slots.length) {
               const idx = order - 1;
               if (idx < slots.length && slots[idx] === null) {
                 slots[idx] = doc;
@@ -1900,7 +1900,8 @@ const setListingFeatured = async (req, res, next) => {
     }
     await listing.save();
     logger.info(`Listing ${listing._id} featured=${isFeatured} featuredOrder=${listing.featuredOrder} by admin`);
-    res.status(200).json({ success: true, isFeatured: listing.isFeatured, featuredOrder: listing.featuredOrder ?? undefined });
+    const featuredOrderValue = listing.featuredOrder != null ? Number(listing.featuredOrder) : undefined;
+    res.status(200).json({ success: true, isFeatured: listing.isFeatured, featuredOrder: featuredOrderValue });
   } catch (error) {
     next(error);
   }
