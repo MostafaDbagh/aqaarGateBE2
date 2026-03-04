@@ -1883,10 +1883,10 @@ const setListingFeatured = async (req, res, next) => {
       return next(errorHandler(404, 'Listing not found'));
     }
     const isFeatured = req.body?.isFeatured === true;
-    listing.isFeatured = isFeatured;
+    let newOrder = null;
     if (isFeatured && req.body?.featuredOrder !== undefined) {
       const order = parseInt(req.body.featuredOrder, 10);
-      const newOrder = (Number.isInteger(order) && order >= 1) ? order : null;
+      newOrder = (Number.isInteger(order) && order >= 1) ? order : null;
       if (newOrder !== null) {
         // Bump down: all other featured listings with featuredOrder >= newOrder get +1 so this one can take the slot
         await Listing.updateMany(
@@ -1894,14 +1894,24 @@ const setListingFeatured = async (req, res, next) => {
           { $inc: { featuredOrder: 1 } }
         );
       }
-      listing.featuredOrder = newOrder;
-    } else if (!isFeatured) {
-      listing.featuredOrder = null;
     }
-    await listing.save();
-    logger.info(`Listing ${listing._id} featured=${isFeatured} featuredOrder=${listing.featuredOrder} by admin`);
-    const featuredOrderValue = listing.featuredOrder != null ? Number(listing.featuredOrder) : undefined;
-    res.status(200).json({ success: true, isFeatured: listing.isFeatured, featuredOrder: featuredOrderValue });
+
+    // Atomic update so featuredOrder is always persisted (avoids Mongoose doc state issues)
+    const update = { isFeatured };
+    if (!isFeatured) {
+      update.featuredOrder = null;
+    } else if (req.body?.featuredOrder !== undefined) {
+      update.featuredOrder = newOrder;
+    }
+    const updated = await Listing.findByIdAndUpdate(
+      req.params.id,
+      update,
+      { new: true, runValidators: true }
+    ).lean();
+
+    const featuredOrderValue = updated.featuredOrder != null ? Number(updated.featuredOrder) : undefined;
+    logger.info(`Listing ${updated._id} featured=${isFeatured} featuredOrder=${featuredOrderValue} by admin`);
+    res.status(200).json({ success: true, isFeatured: updated.isFeatured, featuredOrder: featuredOrderValue });
   } catch (error) {
     next(error);
   }
