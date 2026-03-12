@@ -837,51 +837,48 @@ const getFilteredListings = async (req, res, next) => {
     
     // Run count in parallel with main query to reduce latency
     const countPromise = Listing.countDocuments(filters);
-    // When sorting by featured first (newest/default), use featuredOrder as position: 1 = index 0, 6 = index 5 (Fresh Listings only)
-    const useFeaturedOrderSort = sortOptions.isFeatured === -1 && sortOptions.createdAt === -1;
+    // When filtering by VIP (e.g. VIP page), sort by vipOrder only
+    const useVipOrderSort = filters.isVip === true && sortOptions.createdAt === -1;
+    // Home / default search: priority = VIP (by vipOrder) then featured (by featuredOrder) then rest (createdAt)
+    const useVipThenFeaturedSort = !useVipOrderSort && sortOptions.isFeatured === -1 && sortOptions.createdAt === -1;
     let listings;
-    if (useFeaturedOrderSort) {
+    if (useVipOrderSort) {
       const pipeline = [
         { $match: filters },
-        { $addFields: { _featuredOrder: { $cond: [
-          { $and: [{ $eq: ['$isFeatured', true] }, { $ne: ['$featuredOrder', null] }, { $gte: ['$featuredOrder', 1] }] },
-          '$featuredOrder',
+        { $addFields: { _vipOrder: { $cond: [
+          { $and: [{ $eq: ['$isVip', true] }, { $ne: ['$vipOrder', null] }, { $gte: ['$vipOrder', 1] }] },
+          '$vipOrder',
           999999
         ] } } },
-        { $sort: { isFeatured: -1, _featuredOrder: 1, createdAt: -1 } },
+        { $sort: { _vipOrder: 1, createdAt: -1 } },
         { $skip: skip },
         { $limit: limit },
-        { $project: { _featuredOrder: 0 } }
+        { $project: { _vipOrder: 0 } }
       ];
       listings = await Listing.aggregate(pipeline);
-      // Position-based placement for first page only: featuredOrder N → slot index N-1 (so 6 = 6th item, index 5)
-      if (skip === 0 && listings.length > 0) {
-        const slots = new Array(Math.min(limit, listings.length)).fill(null);
-        const placedIds = new Set();
-        for (const doc of listings) {
-          const order = Number(doc.featuredOrder);
-          if (doc.isFeatured && !Number.isNaN(order) && order >= 1 && order <= limit && order <= slots.length) {
-            const idx = order - 1;
-            if (idx < slots.length && slots[idx] === null) {
-              slots[idx] = doc;
-              placedIds.add(doc._id.toString());
-            }
-          }
-        }
-        let fillIdx = 0;
-        for (let i = 0; i < slots.length; i++) {
-          if (slots[i] === null) {
-            while (fillIdx < listings.length) {
-              const cand = listings[fillIdx++];
-              if (!placedIds.has(cand._id.toString())) {
-                slots[i] = cand;
-                break;
-              }
-            }
-          }
-        }
-        listings = slots.filter(Boolean);
-      }
+    } else if (useVipThenFeaturedSort) {
+      // Explicit order: (1) VIP by vipOrder, (2) featured (non-VIP) by featuredOrder, (3) rest by createdAt
+      const pipeline = [
+        { $match: filters },
+        { $addFields: {
+          _tier: { $cond: [{ $eq: ['$isVip', true] }, 0, { $cond: [{ $eq: ['$isFeatured', true] }, 1, 2 ] } ] },
+          _vipOrder: { $cond: [
+            { $and: [{ $eq: ['$isVip', true] }, { $ne: ['$vipOrder', null] }, { $gte: ['$vipOrder', 1] }] },
+            '$vipOrder',
+            999999
+          ] },
+          _featuredOrder: { $cond: [
+            { $and: [{ $eq: ['$isFeatured', true] }, { $ne: ['$featuredOrder', null] }, { $gte: ['$featuredOrder', 1] }] },
+            '$featuredOrder',
+            999999
+          ] }
+        } },
+        { $sort: { _tier: 1, _vipOrder: 1, _featuredOrder: 1, createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        { $project: { _tier: 0, _vipOrder: 0, _featuredOrder: 0 } }
+      ];
+      listings = await Listing.aggregate(pipeline);
     } else {
       listings = await Listing.find(filters)
         .sort(sortOptions)
@@ -896,47 +893,42 @@ const getFilteredListings = async (req, res, next) => {
       const filtersWithRegex = { ...filters };
       filtersWithRegex.approvalStatus = { $regex: /^approved$/i };
       
-      if (useFeaturedOrderSort) {
-        const pipelineRegex = [
+      if (useVipOrderSort) {
+        const pipelineVipRegex = [
           { $match: filtersWithRegex },
-          { $addFields: { _featuredOrder: { $cond: [
-            { $and: [{ $eq: ['$isFeatured', true] }, { $ne: ['$featuredOrder', null] }, { $gte: ['$featuredOrder', 1] }] },
-            '$featuredOrder',
+          { $addFields: { _vipOrder: { $cond: [
+            { $and: [{ $eq: ['$isVip', true] }, { $ne: ['$vipOrder', null] }, { $gte: ['$vipOrder', 1] }] },
+            '$vipOrder',
             999999
           ] } } },
-          { $sort: { isFeatured: -1, _featuredOrder: 1, createdAt: -1 } },
+          { $sort: { _vipOrder: 1, createdAt: -1 } },
           { $skip: skip },
           { $limit: limit },
-          { $project: { _featuredOrder: 0 } }
+          { $project: { _vipOrder: 0 } }
+        ];
+        listings = await Listing.aggregate(pipelineVipRegex);
+      } else if (useVipThenFeaturedSort) {
+        const pipelineRegex = [
+          { $match: filtersWithRegex },
+          { $addFields: {
+            _tier: { $cond: [{ $eq: ['$isVip', true] }, 0, { $cond: [{ $eq: ['$isFeatured', true] }, 1, 2 ] } ] },
+            _vipOrder: { $cond: [
+              { $and: [{ $eq: ['$isVip', true] }, { $ne: ['$vipOrder', null] }, { $gte: ['$vipOrder', 1] }] },
+              '$vipOrder',
+              999999
+            ] },
+            _featuredOrder: { $cond: [
+              { $and: [{ $eq: ['$isFeatured', true] }, { $ne: ['$featuredOrder', null] }, { $gte: ['$featuredOrder', 1] }] },
+              '$featuredOrder',
+              999999
+            ] }
+          } },
+          { $sort: { _tier: 1, _vipOrder: 1, _featuredOrder: 1, createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limit },
+          { $project: { _tier: 0, _vipOrder: 0, _featuredOrder: 0 } }
         ];
         listings = await Listing.aggregate(pipelineRegex);
-        if (skip === 0 && listings.length > 0) {
-          const slots = new Array(Math.min(limit, listings.length)).fill(null);
-          const placedIds = new Set();
-          for (const doc of listings) {
-            const order = Number(doc.featuredOrder);
-            if (doc.isFeatured && !Number.isNaN(order) && order >= 1 && order <= limit && order <= slots.length) {
-              const idx = order - 1;
-              if (idx < slots.length && slots[idx] === null) {
-                slots[idx] = doc;
-                placedIds.add(doc._id.toString());
-              }
-            }
-          }
-          let fillIdx = 0;
-          for (let i = 0; i < slots.length; i++) {
-            if (slots[i] === null) {
-              while (fillIdx < listings.length) {
-                const cand = listings[fillIdx++];
-                if (!placedIds.has(cand._id.toString())) {
-                  slots[i] = cand;
-                  break;
-                }
-              }
-            }
-          }
-          listings = slots.filter(Boolean);
-        }
       } else {
         listings = await Listing.find(filtersWithRegex)
           .sort(sortOptions)
@@ -1919,7 +1911,8 @@ const setListingFeatured = async (req, res, next) => {
 
 /**
  * Set listing as VIP - admin only. VIP listings appear on the VIP page for time-conscious clients.
- * PATCH /api/listing/:id/vip  body: { isVip: true | false }
+ * PATCH /api/listing/:id/vip  body: { isVip: true | false, vipOrder?: number }  (vipOrder: 1 = first on VIP/home)
+ * When you set vipOrder to N, other VIP listings with vipOrder >= N are bumped down by 1 so this one takes position N.
  */
 const setListingVip = async (req, res, next) => {
   try {
@@ -1932,9 +1925,25 @@ const setListingVip = async (req, res, next) => {
     }
     const isVip = req.body?.isVip === true;
     listing.isVip = isVip;
+    let newOrder = null;
+    if (!isVip) {
+      listing.vipOrder = null;
+    } else if (req.body?.vipOrder !== undefined) {
+      const order = parseInt(req.body.vipOrder, 10);
+      newOrder = (Number.isInteger(order) && order >= 1) ? order : null;
+      if (newOrder !== null) {
+        // Bump down: other VIP listings with vipOrder >= newOrder get +1 so this one can take the slot
+        await Listing.updateMany(
+          { isVip: true, vipOrder: { $gte: newOrder }, _id: { $ne: listing._id } },
+          { $inc: { vipOrder: 1 } }
+        );
+      }
+      listing.vipOrder = newOrder;
+    }
     await listing.save();
-    logger.info(`Listing ${listing._id} isVip=${isVip} by admin`);
-    res.status(200).json({ success: true, isVip: listing.isVip });
+    const vipOrderValue = listing.vipOrder != null ? Number(listing.vipOrder) : undefined;
+    logger.info(`Listing ${listing._id} isVip=${isVip} vipOrder=${vipOrderValue ?? 'null'} by admin`);
+    res.status(200).json({ success: true, isVip: listing.isVip, vipOrder: vipOrderValue });
   } catch (error) {
     next(error);
   }

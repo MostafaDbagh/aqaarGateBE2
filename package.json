@@ -25,7 +25,8 @@
     "test:otp": "node scripts/test-otp-scenarios.js",
     "test:update-images": "node scripts/test-update-listing-images.js",
     "test:arabic-english": "node scripts/test-arabic-english-same-results.js",
-    "test:featured-order": "node scripts/test-featured-order.js"
+    "test:featured-order": "node scripts/test-featured-order.js",
+    "test:vip-featured-order": "node scripts/test-vip-featured-order.js"
   },
   "author": "",
   "license": "ISC",

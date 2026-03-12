@@ -76,6 +76,7 @@ const listingSchema = new mongoose.Schema(
     isFeatured: { type: Boolean, default: false }, // Admin can star listings; featured stay in Fresh Listings
     featuredOrder: { type: Number, default: null }, // Admin-defined position (1 = first listing). Null = no order (after ordered ones, then by date)
     isVip: { type: Boolean, default: false }, // Admin can mark as VIP; shown on VIP page for time-conscious clients
+    vipOrder: { type: Number, default: null }, // Admin-defined position on VIP page / home (1 = first). Null = no order (then by date)
     visitCount: { type: Number, default: 0 },
     notes: { type: String, required: false }, // Additional notes about the property
     notes_ar: { type: String, required: false }, // Arabic notes
@@ -123,6 +124,7 @@ listingSchema.index({ isDeleted: 1, isSold: 1, approvalStatus: 1, propertyType: 
 listingSchema.index({ isDeleted: 1, isSold: 1, approvalStatus: 1, city: 1 }); // City stats performance
 listingSchema.index({ isDeleted: 1, isSold: 1, approvalStatus: 1, state: 1 }); // City stats performance (state fallback)
 listingSchema.index({ isVip: 1, isDeleted: 1, isSold: 1, approvalStatus: 1 }); // VIP page
+listingSchema.index({ isVip: 1, vipOrder: 1, createdAt: -1 }); // VIP page sort by order then newest
 
 const Listing = mongoose.model('Listing', listingSchema);
 
