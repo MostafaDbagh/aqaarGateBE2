@@ -839,15 +839,19 @@ const getFilteredListings = async (req, res, next) => {
     const countPromise = Listing.countDocuments(filters);
     // When filtering by VIP (e.g. VIP page), sort by vipOrder only
     const useVipOrderSort = filters.isVip === true && sortOptions.createdAt === -1;
-    // Home / default search: priority = VIP (by vipOrder) then featured (by featuredOrder) then rest (createdAt)
-    const useVipThenFeaturedSort = !useVipOrderSort && sortOptions.isFeatured === -1 && sortOptions.createdAt === -1;
+    // Home / default search: priority = VIP (by vipOrder 1,2,3…) then featured then rest. Used for listing page & Fresh Listings.
+    const sortIsNewest = (req.query.sort || '').toLowerCase() === 'newest' || (!req.query.sort && sortOptions.createdAt === -1);
+    const useVipThenFeaturedSort = !useVipOrderSort && (
+      (sortOptions.isFeatured === -1 && sortOptions.createdAt === -1) || sortIsNewest
+    );
     let listings;
-    if (useVipOrderSort) {
+      if (useVipOrderSort) {
+      // vipOrder 1 = index 0, vipOrder 2 = index 1, vipOrder 3 = index 2. Use _vipOrder = vipOrder - 1; null/no order -> 999999 (last).
       const pipeline = [
         { $match: filters },
         { $addFields: { _vipOrder: { $cond: [
-          { $and: [{ $eq: ['$isVip', true] }, { $ne: ['$vipOrder', null] }, { $gte: ['$vipOrder', 1] }] },
-          '$vipOrder',
+          { $and: [{ $eq: ['$isVip', true] }, { $gte: [{ $toInt: { $ifNull: ['$vipOrder', 0] } }, 1] }] },
+          { $subtract: [{ $toInt: { $ifNull: ['$vipOrder', 999999] } }, 1] },
           999999
         ] } } },
         { $sort: { _vipOrder: 1, createdAt: -1 } },
@@ -857,19 +861,19 @@ const getFilteredListings = async (req, res, next) => {
       ];
       listings = await Listing.aggregate(pipeline);
     } else if (useVipThenFeaturedSort) {
-      // Explicit order: (1) VIP by vipOrder, (2) featured (non-VIP) by featuredOrder, (3) rest by createdAt
+      // vipOrder 1 = index 0, vipOrder 2 = index 1, vipOrder 3 = index 2. _vipOrder = vipOrder - 1; null -> 999999.
       const pipeline = [
         { $match: filters },
         { $addFields: {
           _tier: { $cond: [{ $eq: ['$isVip', true] }, 0, { $cond: [{ $eq: ['$isFeatured', true] }, 1, 2 ] } ] },
           _vipOrder: { $cond: [
-            { $and: [{ $eq: ['$isVip', true] }, { $ne: ['$vipOrder', null] }, { $gte: ['$vipOrder', 1] }] },
-            '$vipOrder',
+            { $and: [{ $eq: ['$isVip', true] }, { $gte: [{ $toInt: { $ifNull: ['$vipOrder', 0] } }, 1] }] },
+            { $subtract: [{ $toInt: { $ifNull: ['$vipOrder', 999999] } }, 1] },
             999999
           ] },
           _featuredOrder: { $cond: [
-            { $and: [{ $eq: ['$isFeatured', true] }, { $ne: ['$featuredOrder', null] }, { $gte: ['$featuredOrder', 1] }] },
-            '$featuredOrder',
+            { $and: [{ $eq: ['$isFeatured', true] }, { $gte: [{ $toInt: { $ifNull: ['$featuredOrder', 0] } }, 1] }] },
+            { $toInt: { $ifNull: ['$featuredOrder', 999999] } },
             999999
           ] }
         } },
@@ -897,8 +901,8 @@ const getFilteredListings = async (req, res, next) => {
         const pipelineVipRegex = [
           { $match: filtersWithRegex },
           { $addFields: { _vipOrder: { $cond: [
-            { $and: [{ $eq: ['$isVip', true] }, { $ne: ['$vipOrder', null] }, { $gte: ['$vipOrder', 1] }] },
-            '$vipOrder',
+            { $and: [{ $eq: ['$isVip', true] }, { $gte: [{ $toInt: { $ifNull: ['$vipOrder', 0] } }, 1] }] },
+            { $subtract: [{ $toInt: { $ifNull: ['$vipOrder', 999999] } }, 1] },
             999999
           ] } } },
           { $sort: { _vipOrder: 1, createdAt: -1 } },
@@ -913,13 +917,13 @@ const getFilteredListings = async (req, res, next) => {
           { $addFields: {
             _tier: { $cond: [{ $eq: ['$isVip', true] }, 0, { $cond: [{ $eq: ['$isFeatured', true] }, 1, 2 ] } ] },
             _vipOrder: { $cond: [
-              { $and: [{ $eq: ['$isVip', true] }, { $ne: ['$vipOrder', null] }, { $gte: ['$vipOrder', 1] }] },
-              '$vipOrder',
+              { $and: [{ $eq: ['$isVip', true] }, { $gte: [{ $toInt: { $ifNull: ['$vipOrder', 0] } }, 1] }] },
+              { $subtract: [{ $toInt: { $ifNull: ['$vipOrder', 999999] } }, 1] },
               999999
             ] },
             _featuredOrder: { $cond: [
-              { $and: [{ $eq: ['$isFeatured', true] }, { $ne: ['$featuredOrder', null] }, { $gte: ['$featuredOrder', 1] }] },
-              '$featuredOrder',
+              { $and: [{ $eq: ['$isFeatured', true] }, { $gte: [{ $toInt: { $ifNull: ['$featuredOrder', 0] } }, 1] }] },
+              { $toInt: { $ifNull: ['$featuredOrder', 999999] } },
               999999
             ] }
           } },
